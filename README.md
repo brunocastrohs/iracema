@@ -295,3 +295,161 @@ LIMIT 10;
 | MVP  | Perguntas tabulares (SELECTs)           |
 | 1.1  | RAG usando ChromaDB                     |
 | 1.2  | Suporte a todas as tabelas da PEDEA     |
+
+Perfeito — vou adicionar ao **README.md** uma seção profissional explicando:
+
+* Trunk Based Development (TBD)
+* Padrão de commits semânticos (conventional commits)
+* Como usar as tags (`feat`, `fix`, `chore`, `refactor`, `docs`, etc.)
+* Como isso se encaixa no fluxo do projeto Iracema
+
+Vou inserir no final do README, logo antes da seção **Contribuição**.
+
+---
+
+# 🪵 **Trunk Based Development (TBD)**
+
+O projeto **Iracema** adota o modelo **Trunk Based Development**, que é hoje o padrão para equipes de alta performance, CI/CD rápido e entregas contínuas.
+
+### ✔ Princípios aplicados no Iracema
+
+1. **A branch principal é sempre deployável**
+   Toda mudança integrada no `main` deve estar estável.
+
+2. **Commits pequenos, frequentes e integrados rapidamente**
+   Branches curtas, típicas de 30 minutos a poucas horas.
+
+3. **Sem branches long-lived**
+   Nada de branches que ficam dias ou semanas desviadas da `main`.
+
+4. **Feature flags** para funcionalidades incompletas
+   Raramente usamos branches longas; usamos toggles quando necessário.
+
+5. **CI automático** executado a cada push
+   Garante que falhas sejam detectadas imediatamente.
+
+6. **Pull Requests curtos** e rápidos de revisar
+   PRs longos são evitados.
+
+### ✔ Benefícios para o projeto Iracema
+
+* Evita divergência entre camadas (Application, Data, External…).
+* Permite evoluir a arquitetura (LLM providers, Chroma, RAG) sem grandes rupturas.
+* Facilita refatorações e reorganização de pastas.
+* Garante que a API esteja sempre em um estado executável.
+
+---
+
+# 📝 **Commits Semânticos (Conventional Commits)**
+
+Todos os commits devem seguir o padrão:
+
+```
+<tipo>(escopo opcional): descrição curta
+```
+
+### 🔹 Tipos aceitos no projeto
+
+| Tipo         | Quando usar                                               |
+| ------------ | --------------------------------------------------------- |
+| **feat**     | Nova funcionalidade (ex.: novo controller, novo provider) |
+| **fix**      | Correção de bug (ex.: SQL inválido, erro no provider)     |
+| **chore**    | Tarefas de manutenção (configs, scripts, renomeações)     |
+| **docs**     | Alterações no README, documentação, comentários           |
+| **refactor** | Refatoração sem mudar comportamento da API                |
+| **test**     | Inclusão ou ajuste de testes                              |
+| **perf**     | Melhorias de performance (ex.: cache, otimização SQL)     |
+| **build**    | Mudanças em Dockerfile, pipeline, dependências            |
+| **ci**       | Ajustes em CI/CD                                          |
+| **style**    | Alterações que não modificam lógica (lint, formatação)    |
+
+### ✔ Exemplos reais para o projeto Iracema
+
+#### 1. Nova feature
+
+```
+feat(api): adicionar endpoint /ask para consultas naturais
+```
+
+#### 2. Correção de bug
+
+```
+fix(sql): corrigir validação de SELECT no gerador de SQL
+```
+
+#### 3. Alteração estrutural
+
+```
+refactor(architecture): mover camada Entities para Models
+```
+
+#### 4. Documentação
+
+```
+docs: adicionar seção de trunk based development ao README
+```
+
+#### 5. Ajuste do Ollama Provider
+
+```
+feat(external): implementar Phi3LocalLLMProvider baseado em Ollama
+```
+
+#### 6. Configuração
+
+```
+chore(settings): adicionar configs de LLM no appsettings.dev.json
+```
+
+---
+
+# 🧭 **Como fica o fluxo de desenvolvimento**
+
+### 1️⃣ Criar uma branch curta a partir da main:
+
+```
+git checkout -b feat/ask-service
+```
+
+### 2️⃣ Fazer commits semânticos:
+
+```
+git commit -m "feat(ask): implementar serviço principal de orquestração"
+```
+
+### 3️⃣ Push rápido e PR curto:
+
+```
+git push -u origin feat/ask-service
+```
+
+### 4️⃣ Revisão e merge imediato na main
+
+(sem long-lived branches)
+
+### 5️⃣ Deploy automatizado ou manual
+
+---
+
+# 🏷 **Tags de versão (opcional)**
+
+Usamos semver:
+
+```
+v1.0.0
+v1.1.0
+v1.1.1
+```
+
+Tags são criadas apenas em commits estáveis da `main`.
+
+---
+
+# 🧩 Integração com o Pipeline de LLM
+
+O padrão de commits e TBD é extremamente útil no Iracema porque:
+
+* Nova camada External não quebra Application
+* Mudança no provider não afeta controllers
+* Novos prompts podem ser adicionados sem refatorações gigantes
+* RAG pode ser plugado e desplugado dinamicamente
