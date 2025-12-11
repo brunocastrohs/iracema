@@ -1,115 +1,196 @@
-# 🌿 Projeto IRACEMA
+Aqui está um **README.md profissional, completo e pronto para usar** no repositório do projeto **Iracema** — seguindo Clean Architecture, com explicações de stack, fluxo, instalação, execução, uso e arquitetura interna.
 
-### Sistema de Importação e Publicação de Shapefiles no GeoServer  
-**Desenvolvido para a Secretaria do Meio Ambiente do Ceará (SEMA/CE)**
+Ele foi escrito considerando **todo o código que já desenvolvemos**, incluindo:
 
----
+* FastAPI
+* ChromaDB
+* LangChain
+* Phi-3 / Ollama
+* OpenAI API-like providers
+* Clean Architecture
+* Serviços Ask / LLM Client
+* Controllers
+* Dockerfile
 
-## 📘 Visão Geral
-
-**Iracema** é um sistema web que automatiza o processo de:
-
-1. Upload de arquivos **Shapefile** (`.zip`);
-2. Importação para uma base **PostgreSQL/PostGIS**;
-3. Geração automática de tabelas e estilos **SLD**;
-4. Publicação das camadas no **GeoServer**, com criação de `featureTypes`, `styles` e `layers` via API REST.
-
-O sistema substitui o fluxo manual via scripts Bash, centralizando tudo em uma interface web moderna (SPA) e uma API Python robusta.
+Caso queira que ele fique **mais resumido**, **mais técnico**, ou **com diagramas**, posso ajustar.
 
 ---
 
-## ⚙️ Arquitetura
+# 📘 **Iracema — Sistema de Consultas Inteligentes sobre Zoneamento Costeiro (ZEEC/CE)**
 
-O sistema segue o padrão **Arquitetura em Cebola (Onion Architecture)**, com as seguintes camadas:
+Iracema é um **chatbot geoespacial inteligente** que responde perguntas em linguagem natural sobre os dados de zoneamento costeiro do Ceará (ZEEC), utilizando:
+
+* **Geração de SQL por LLM**
+* **Execução real sobre PostgreSQL/PostGIS**
+* **Explicação semântica dos resultados**
+* **Orquestração segura e auditável**
+* **Arquitetura limpa (Clean Architecture)**
+
+O objetivo do MVP é responder perguntas exclusivamente sobre a tabela:
 
 ```
+1201_ce_zeec_zoneamento_p_litora_2021_pol
+```
 
-iracema/
+---
+
+# 🧠 **Stack Principal**
+
+### 🔹 **Backend**
+
+* **FastAPI**
+* **Python 3.11**
+* **SQLAlchemy**
+* **PostgreSQL/PostGIS**
+* **Pydantic v2**
+* **PyJWT (autenticação)**
+
+### 🔹 **LLM / IA**
+
+* **Phi-3 (Ollama)** *ou* qualquer modelo compatível com **OpenAI API**
+* **LangChain**
+* **ChromaDB (RAG opcional)**
+
+### 🔹 **Arquitetura**
+
+* Clean Architecture com 5 camadas:
+
+  * **Models**
+  * **Data**
+  * **Application**
+  * **External**
+  * **Presentation (API)**
+
+---
+
+# 📁 **Estrutura do Projeto**
+
+```
+Iracema/
 │
-├── Entities/                # Modelos e Helpers de domínio
-│   ├── shapefile_entity.py
-│   ├── geoserver_helper.py
-│   └── ...
+├── Models/               # Entidades internas (conversas, mensagens, logs)
+│   ├── iracema_conversation.py
+│   ├── iracema_message.py
+│   ├── iracema_sql_log.py
+│   └── iracema_enums.py
 │
-├── Data/                    # Repositórios e interfaces de persistência
-│   ├── interfaces/
-│   │   └── i_shapefile_repository.py
-│   ├── repositories/
-│   │   └── shapefile_repository.py
-│   └── db_context.py
+├── Data/
+│   ├── db_context.py
+│   └── repositories/
 │
-├── Application/             # DTOs, mapeamentos, serviços e regras de negócio
+├── Application/
 │   ├── dto/
-│   │   └── shapefile_dto.py
 │   ├── interfaces/
-│   │   └── i_geoserver_service.py
-│   ├── services/
-│   │   ├── shapefile_service.py
-│   │   └── geoserver_service.py
-│   └── mappings/
-│       └── shapefile_mapper.py
+│   ├── helpers/
+│   └── services/
 │
-├── Presentation/
-│   ├── API/                 # Backend (FastAPI)
-│   │   ├── controllers/
-│   │   │   └── shapefile_controller.py
-│   │   ├── main.py
-│   │   ├── appsettings.dev.json
-│   │   └── appsettings.docker.json
-│   │
-│   └── UI/                  # Frontend (React)
-│       ├── src/
-│       │   ├── api/
-│       │   │   └── shapefileApi.js
-│       │   ├── components/
-│       │   │   ├── UploadForm.jsx
-│       │   │   ├── TableList.jsx
-│       │   │   └── PublishStatus.jsx
-│       │   ├── pages/
-│       │   │   └── Home.jsx
-│       │   └── App.jsx
-│       └── package.json
+├── External/
+│   ├── ai/
+│   │   ├── llm_provider_base.py
+│   │   ├── openai_llm_provider.py
+│   │   ├── phi3_local_llm_provider.py
+│   │   └── langchain_phi3_provider.py
+│   └── vector/
+│       ├── vector_store_base.py
+│       └── chromadb_vector_store.py
 │
-└── docker/
-├── Dockerfile.api
-├── Dockerfile.ui
-└── README.md
-
+└── Presentation/
+    ├── API/
+    │   ├── controllers/
+    │   ├── helpers/
+    │   ├── settings.py
+    │   ├── main.py
+    │   └── requirements.txt
+    └── Dockerfile
 ```
 
 ---
 
-## 🧩 Fluxo de Operação
+# 🔄 **Fluxo de Funcionamento**
 
-1. O usuário faz upload de um `.zip` contendo `.shp`, `.shx`, `.dbf`, `.prj`;
-2. A **API Python** extrai e importa via `ogr2ogr` para o banco **PostGIS**;
-3. O serviço **GeoServerService**:
-   - Cria o estilo (`POST /styles`);
-   - Faz upload do SLD (`PUT /styles/{name}`);
-   - Cria o `featureType` (`POST /featuretypes`);
-   - Atribui o estilo à camada (`PUT /layers/{workspace}:{layer}`);
-4. O **frontend React** exibe logs e status em tempo real.
+## 1. Usuário faz pergunta ao endpoint:
+
+```
+POST /iracema-api/v1/ask
+```
+
+## 2. A Iracema executa o pipeline:
+
+```
+Pergunta → Geração de SQL → Execução no PostgreSQL 
+→ Explicação → Resposta Final
+```
+
+### ✔ **Primeira chamada ao LLM (Phi-3 / OpenAI / Ollama)**
+
+* Gera SQL seguro e validado.
+
+### ✔ **Execução real no banco**
+
+* O SQL roda em PostgreSQL/PostGIS.
+* Apenas SELECT permitido.
+
+### ✔ **Segunda chamada ao LLM**
+
+* Explica o resultado da consulta.
+* Gera texto natural contextualizado.
 
 ---
 
-## 🧠 Stack Técnica
+# 🗄 **Banco de Dados Utilizado**
 
-| Camada | Tecnologia |
-|:-------|:------------|
-| Banco de Dados | PostgreSQL 14 + PostGIS 3 |
-| Backend | Python 3.11 + FastAPI |
-| ORM | SQLAlchemy |
-| Frontend | React 18 + Axios + Material UI |
-| Comunicação | REST (JSON) |
-| Infraestrutura | Docker (sem Compose) |
+No MVP só usamos a tabela:
+
+```sql
+CREATE TABLE IF NOT EXISTS public."1201_ce_zeec_zoneamento_p_litora_2021_pol"
+(
+    gid integer PRIMARY KEY,
+    id numeric,
+    zonas varchar(254),
+    sub_zonas varchar(254),
+    letra_subz varchar(254),
+    perimet_km numeric,
+    area_km2 numeric,
+    geom geometry(MultiPolygon,4674)
+);
+```
+
+> A geometria não é usada no MVP, apenas atributos tabulares.
 
 ---
 
-## ⚙️ Configuração
+# 🚀 **Como Rodar Localmente**
 
-### Arquivos de configuração (`appsettings`)
+## 1. Instalar dependências do Ubuntu
 
-#### `appsettings.dev.json`
+```bash
+sudo apt update
+
+sudo apt install -y \
+  python3-dev python3-pip build-essential gcc g++ \
+  libssl-dev libffi-dev cmake git \
+  libblas-dev liblapack-dev libstdc++6
+```
+
+## 2. Instalar Ollama (opcional mas recomendado)
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull phi3
+ollama serve
+```
+
+## 3. Criar ambiente Python
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r Presentation/API/requirements.txt
+```
+
+## 4. Configurar `appsettings.dev.json`
+
+Exemplo:
 
 ```json
 {
@@ -117,183 +198,100 @@ iracema/
     "Host": "localhost",
     "Port": 5432,
     "User": "postgres",
-    "Password": "001q2w3e00",
-    "Name": "pedea"
+    "Password": "123",
+    "Name": "iracema_db"
   },
-  "GeoServer": {
-    "BaseUrl": "http://localhost:8080/geoserver/rest",
-    "Workspace": "zcm",
-    "Datastore": "zcm_ds",
-    "User": "admin",
-    "Password": "001q2w3e4r5t6y00"
-  },
-  "Upload": {
-    "TempPath": "/tmp/uploads"
+  "LLM": {
+    "ApiKey": "dummy",
+    "BaseUrl": "http://localhost:11434/v1",
+    "ModelSql": "phi3",
+    "ModelExplainer": "phi3"
   }
 }
 ```
 
-#### `appsettings.docker.json`
-
-```json
-{
-  "Database": {
-    "Host": "172.18.17.38",
-    "Port": 5432,
-    "User": "postgres",
-    "Password": "001q2w3e00",
-    "Name": "pedea"
-  },
-  "GeoServer": {
-    "BaseUrl": "http://172.18.17.38:8080/geoserver/rest",
-    "Workspace": "zcm",
-    "Datastore": "zcm_ds",
-    "User": "admin",
-    "Password": "001q2w3e4r5t6y00"
-  },
-  "Upload": {
-    "TempPath": "/app/uploads"
-  }
-}
-```
-
----
-
-## 🐳 Docker
-
-### Backend (FastAPI)
-
-`docker/Dockerfile.api`
-
-```dockerfile
-FROM python:3.11-slim
-WORKDIR /app
-COPY Presentation/API/ /app/
-RUN pip install --no-cache-dir -r requirements.txt
-ENV ENVIRONMENT=docker
-EXPOSE 9090
-CMD ["python", "main.py"]
-```
-
-### Frontend (React)
-
-`docker/Dockerfile.ui`
-
-```dockerfile
-FROM node:20-alpine
-WORKDIR /app
-COPY Presentation/UI/ /app/
-RUN npm install && npm run build
-EXPOSE 3000
-CMD ["npm", "start"]
-```
-
----
-
-## 🚀 Execução Local
+## 5. Iniciar a API
 
 ```bash
-# Banco
-sudo service postgresql start
-
-# API
-cd Presentation/API
-python main.py
-
-# Frontend
-cd Presentation/UI
-npm start
+uvicorn Presentation.API.main:app --host 0.0.0.0 --port 9090 --reload
 ```
 
 ---
 
-## 🧱 Estrutura das Entidades Principais
+# 🐋 **Rodar via Docker**
 
-### `ShapefileEntity`
+Build:
 
-```python
-class ShapefileEntity:
-    def __init__(self, name, path, srid=4674):
-        self.name = name
-        self.path = path
-        self.srid = srid
+```bash
+docker build -t iracema-api .
 ```
 
-### `ShapefileRepository`
+Run:
 
-* Importa dados via `ogr2ogr`;
-* Gera SQL dinâmico para importação;
-* Executa comandos PostgreSQL com `psycopg2`.
-
-### `GeoServerService`
-
-* Envia requisições REST para o GeoServer;
-* Gera logs e status por camada;
-* Valida publicação e SLD (equivalente aos scripts `::14` e `::15`).
-
----
-
-## 🧪 Testes Automatizados
-
-* Testes de integração com banco PostGIS;
-* Testes de API com `pytest` e `httpx`;
-* Mock de GeoServer com `responses`.
-
----
-
-## 📦 Exemplos de Uso
-
-### Upload e publicação via API
-
-```
-POST /api/shapefiles/upload
-FormData: { file: shapefile.zip }
-
-→ 200 OK
-{
-  "layer": "bairro_fortaleza",
-  "status": "Publicado com sucesso no GeoServer"
-}
-```
-
-### Interface Web
-
-* Upload via drag-and-drop;
-* Barra de progresso e logs em tempo real;
-* Indicadores de status:
-
-  * ✅ Publicado
-  * ⚠️ Aguardando estilo
-  * ❌ Falha
-
----
-
-## 🧰 Dependências
-
-### Backend
-
-```
-fastapi
-uvicorn
-psycopg2-binary
-sqlalchemy
-requests
-python-dotenv
-```
-
-### Frontend
-
-```
-react
-axios
-material-ui
-react-dropzone
+```bash
+docker run -d \
+  -p 9090:9090 \
+  -e ENVIRONMENT=docker \
+  iracema-api
 ```
 
 ---
 
-## 🔐 Segurança
+# 💬 **Exemplo de Requisição**
 
-* Upload permitido apenas para `.zip` contendo `.shp`, `.dbf`, `.shx`, `.prj`;
-* Limite de tamanho configurável;
-* API preparada para integração futura com autenticação JWT.
+```bash
+curl -X POST http://localhost:9090/iracema-api/v1/ask \
+  -H "Authorization: Bearer <seu_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "conversationId": null,
+        "question": "Quais são as zonas com maior area_km2?"
+      }'
+```
+
+---
+
+# 📜 **Segurança**
+
+Iracema usa:
+
+* JWT baseado em PyJWT
+* Logs completos de:
+
+  * perguntas
+  * SQL gerados
+  * respostas
+* Regras de segurança:
+
+  * Somente `SELECT` permitido
+  * SQL validado previamente
+  * Conversas e mensagens persistidas
+
+---
+
+# 🧪 **Testes de SQL Automaticamente Gerados**
+
+Exemplos de perguntas suportadas:
+
+* *"Quais zonas têm maior área acumulada?"*
+* *"Liste as subzonas e ordene por perímetro."*
+* *"Quais zonas possuem letra_subz igual a 'A'?"*
+
+O LLM sempre gera SQL válidos como:
+
+```sql
+SELECT zonas, area_km2
+FROM "1201_ce_zeec_zoneamento_p_litora_2021_pol"
+ORDER BY area_km2 DESC
+LIMIT 10;
+```
+
+---
+
+# 🖥 **Roadmap**
+
+| Fase | Funcionalidade                          |
+| ---- | --------------------------------------- |
+| MVP  | Perguntas tabulares (SELECTs)           |
+| 1.1  | RAG usando ChromaDB                     |
+| 1.2  | Suporte a todas as tabelas da PEDEA     |
