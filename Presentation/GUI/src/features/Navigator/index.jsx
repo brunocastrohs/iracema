@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import "./styles.css";
-import logo from "../../_assets/images/logo_fauno.png";
+import logo from "../../_assets/images/logo_iracema.png";
 
 export default function Navigator() {
   const [collapsed, setCollapsed] = useState(false);

@@ -1,6 +1,5 @@
 # Presentation/API/controllers/auth_controller.py
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr
@@ -21,9 +20,9 @@ class TokenResponse(BaseModel):
     expires_in: int  # segundos
 
 # ---- config JWT (com defaults seguros p/ dev) ----
-JWT_SECRET: str = getattr(settings, "JWT_SECRET", "fauno_dev_secret_change_me")
-JWT_ISSUER: str = getattr(settings, "JWT_ISSUER", "Fauno")
-JWT_AUDIENCE: str = getattr(settings, "JWT_AUDIENCE", "FaunoClient")
+JWT_SECRET: str = getattr(settings, "JWT_SECRET", "iracema_dev_secret_change_me")
+JWT_ISSUER: str = getattr(settings, "JWT_ISSUER", "Iracema")
+JWT_AUDIENCE: str = getattr(settings, "JWT_AUDIENCE", "IracemaClient")
 JWT_EXPIRES_MINUTES: int = getattr(settings, "JWT_EXPIRES_MINUTES", 120)
 JWT_ALG: str = "HS256"
 
@@ -31,7 +30,7 @@ JWT_ALG: str = "HS256"
 @router.post("/login", response_model=TokenResponse)
 def login(body: LoginRequest) -> TokenResponse:
     # valida credenciais fixas
-    if not (body.email.lower() == "fauno@admin.br" and body.password == "00cc00cc"):
+    if not (body.email.lower() == "iracema@admin.br" and body.password == "00cc00cc"):
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
     now = datetime.now(timezone.utc)
@@ -44,7 +43,7 @@ def login(body: LoginRequest) -> TokenResponse:
         "iat": int(now.timestamp()),
         "exp": int(exp.timestamp()),
         "roles": ["admin"],  # opcional
-        "app": "fauno",
+        "app": "iracema",
     }
 
     token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)

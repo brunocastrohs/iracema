@@ -1,4 +1,4 @@
-# 🌿 Projeto FAUNO
+# 🌿 Projeto IRACEMA
 
 ### Sistema de Importação e Publicação de Shapefiles no GeoServer  
 **Desenvolvido para a Secretaria do Meio Ambiente do Ceará (SEMA/CE)**
@@ -7,7 +7,7 @@
 
 ## 📘 Visão Geral
 
-**Fauno** é um sistema web que automatiza o processo de:
+**Iracema** é um sistema web que automatiza o processo de:
 
 1. Upload de arquivos **Shapefile** (`.zip`);
 2. Importação para uma base **PostgreSQL/PostGIS**;
@@ -24,7 +24,7 @@ O sistema segue o padrão **Arquitetura em Cebola (Onion Architecture)**, com as
 
 ```
 
-fauno/
+iracema/
 │
 ├── Entities/                # Modelos e Helpers de domínio
 │   ├── shapefile_entity.py

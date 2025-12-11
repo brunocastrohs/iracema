@@ -15,7 +15,7 @@ export function useAuth() {
 
       // Armazena token
       const storage = remember ? localStorage : sessionStorage;
-      storage.setItem("fauno_token", access_token);
+      storage.setItem("iracema_token", access_token);
 
       return { ok: true, data };
     } catch (err) {

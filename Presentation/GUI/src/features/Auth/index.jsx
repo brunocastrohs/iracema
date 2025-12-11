@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { login } from "./service";          
 import "./styles.css";                      
 
-import logo_fauno from "../../_assets/images/logo_fauno.png";
+import logo_iracema from "../../_assets/images/logo_iracema.png";
 import hero from "../../_assets/images/hero.png";
 
 export default function Auth() {
@@ -36,15 +36,15 @@ export default function Auth() {
       }
 
       const storage = remember ? localStorage : sessionStorage;
-      storage.setItem("fauno_token", data.access_token);
+      storage.setItem("iracema_token", data.access_token);
       storage.setItem(
-        "fauno_token_bearer",
+        "iracema_token_bearer",
         `${data.token_type || "Bearer"} ${data.access_token}`
       );
 
       const other = remember ? sessionStorage : localStorage;
-      other.removeItem("fauno_token");
-      other.removeItem("fauno_token_bearer");
+      other.removeItem("iracema_token");
+      other.removeItem("iracema_token_bearer");
 
       navigate("/layers", { replace: true }); 
     } catch (ex) {
@@ -62,8 +62,8 @@ export default function Auth() {
       {/* Coluna do formulário (direita) */}
       <div className="auth-panel">
         <div className="auth-card">
-          <div className="auth-logo-fauno">
-            {logo_fauno && <img src={logo_fauno} alt="FAUNO" />}
+          <div className="auth-logo-iracema">
+            {logo_iracema && <img src={logo_iracema} alt="IRACEMA" />}
           </div>
 
           {error && <div className="error-box">{error}</div>}

@@ -6,8 +6,8 @@ import "./styles.css";
 
 function hasValidToken() {
   const token =
-    localStorage.getItem("fauno_token") ||
-    sessionStorage.getItem("fauno_token");
+    localStorage.getItem("iracema_token") ||
+    sessionStorage.getItem("iracema_token");
   return Boolean(token);
 }
 

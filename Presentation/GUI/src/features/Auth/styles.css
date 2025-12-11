@@ -39,14 +39,14 @@
   max-width: 420px;
 }
 
-.auth-logo-fauno {
+.auth-logo-iracema {
   display: flex;
   align-items: center;
   flex-flow: column;
   margin-bottom: 40px;
 }
 
-.auth-logo-fauno img {
+.auth-logo-iracema img {
   height: 5vw;
 }
 
@@ -65,7 +65,7 @@
     padding: 2rem;
   }
 
-  .auth-logo-fauno img {
+  .auth-logo-iracema img {
     height: 15vw;
   }
 }

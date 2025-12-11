@@ -1,3 +1,4 @@
+# Presentation/API/main.py
 #Inicializar
 #python3 -m venv .venv && source .venv/bin/activate
 #pip install -r Presentation/API/requirements.txt
@@ -13,13 +14,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from Presentation.API.settings import settings
-from Presentation.API.exception_handlers import register_exception_handlers
-from Presentation.API.controllers.shapefile_controller import router as shapefile_router
 from Presentation.API.controllers.auth_controller import router as auth_router
+from Presentation.API.controllers.iracema_controller import router as iracema_router
 
 
 app = FastAPI(title=settings.API_TITLE, version=settings.API_VERSION)
-register_exception_handlers(app)
 
 # CORS a partir do settings
 app.add_middleware(
@@ -31,13 +30,8 @@ app.add_middleware(
 )
 
 # Rotas com prefixo do settings
-app.include_router(
-    shapefile_router,
-    prefix=f"{settings.API_PREFIX}/shapefiles",
-    tags=["Shapefiles"],
-)
-
 app.include_router(auth_router, prefix=f"{settings.API_PREFIX}/auth", tags=["Auth"])
+app.include_router(iracema_router, prefix=f"{settings.API_PREFIX}/iracema", tags=["Iracema"])
 
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@ function History() {
 
 export default function App() {
   return (
-    <BrowserRouter basename="/fauno">
+    <BrowserRouter basename="/iracema">
       <Routes>
         <Route path="/" element={<Auth />} />
 

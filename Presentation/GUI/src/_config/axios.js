@@ -2,7 +2,7 @@ import axios from "axios";
 
 const baseURL =
   import.meta.env.VITE_API_BASE_URL ||
-  'fauno-api/v1';
+  'iracema-api/v1';
 
 const api = axios.create({
   baseURL,
@@ -20,7 +20,7 @@ const api = axios.create({
 // Adiciona JWT automaticamente se existir no localStorage
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("fauno_token");
+    const token = localStorage.getItem("iracema_token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -37,7 +37,7 @@ api.interceptors.response.use(
       // Caso o token tenha expirado
       if (error.response.status === 401) {
         console.warn("Sessão expirada. Redirecionando para login...");
-        localStorage.removeItem("fauno_token");
+        localStorage.removeItem("iracema_token");
       }
 
       // Mensagens customizadas de erro
