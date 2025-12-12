@@ -1,8 +1,9 @@
 import json
 import os
 from pathlib import Path
+from typing import List
+
 from pydantic import BaseModel, Field
-from typing import List, Optional
 
 
 class _Settings(BaseModel):
@@ -34,10 +35,14 @@ class _Settings(BaseModel):
     JWT_EXPIRES_MINUTES: int = Field(default=120)
 
     # LLM (Iracema)
-    LLM_API_KEY: str                   # pode vir do JSON ou de env
-    LLM_BASE_URL: Optional[str] = None
-    LLM_MODEL_SQL: str = Field(default="gpt-4o-mini")
-    LLM_MODEL_EXPLAINER: Optional[str] = None
+    LLM_PROVIDER: str = Field(default="ollama")
+    LLM_BASE_URL: str = Field(default="http://localhost:11434")
+    LLM_MODEL_SQL: str = Field(default="phi3")
+    LLM_MODEL_EXPLAINER: str = Field(default="phi3")
+    LLM_TEMPERATURE: float = Field(default=0.0)
+    
+    VECTORSTORE_DIR: str = Field(default="/var/lib/iracema/chroma")
+
 
 
 def _load_json(path: Path) -> dict:
@@ -54,20 +59,25 @@ def _resolve_config_file() -> Path:
 _cfg = _load_json(_resolve_config_file())
 
 
+_MISSING = object()
+
 def _get(path: str, default=None):
     cur = _cfg
     for key in path.split("."):
-        cur = cur.get(key, {})
-    return cur if cur else (default if default is not None else cur)
+        if not isinstance(cur, dict) or key not in cur:
+            return default
+        cur = cur[key]
+    # aqui cur pode ser False/0/"" e ainda é válido
+    return cur if cur is not _MISSING else default
 
 
 settings = _Settings(
     # DB
-    DB_HOST=_cfg["Database"]["Host"],
-    DB_PORT=int(_cfg["Database"]["Port"]),
-    DB_USER=_cfg["Database"]["User"],
-    DB_PASSWORD=_cfg["Database"]["Password"],
-    DB_NAME=_cfg["Database"]["Name"],
+    DB_HOST=_get("Database.Host"),
+    DB_PORT=int(_get("Database.Port")),
+    DB_USER=_get("Database.User"),
+    DB_PASSWORD=_get("Database.Password"),
+    DB_NAME=_get("Database.Name"),
 
     # API
     API_TITLE=_get("Api.Title", "Iracema API"),
@@ -89,12 +99,13 @@ settings = _Settings(
     JWT_AUDIENCE=_get("Jwt.Audience", "IracemaClient"),
     JWT_EXPIRES_MINUTES=int(_get("Jwt.ExpiresMinutes", 120)),
 
-    # LLM (valores do JSON podendo ser sobrescritos por env)
-    LLM_API_KEY=os.getenv("IRACEMA_LLM_API_KEY", _get("Llm.ApiKey", "")),
-    LLM_BASE_URL=os.getenv("IRACEMA_LLM_BASE_URL", _get("Llm.BaseUrl", None)),
-    LLM_MODEL_SQL=os.getenv("IRACEMA_LLM_MODEL_SQL", _get("Llm.ModelSql", "gpt-4o-mini")),
-    LLM_MODEL_EXPLAINER=os.getenv(
-        "IRACEMA_LLM_MODEL_EXPLAINER",
-        _get("Llm.ModelExplainer", None),
-    ),
+    # LLM
+    LLM_PROVIDER=_get("LLM.Provider", "ollama"),
+    LLM_BASE_URL=_get("LLM.BaseUrl", "http://localhost:11434"),
+    LLM_MODEL_SQL=_get("LLM.ModelSql", "phi3"),
+    LLM_MODEL_EXPLAINER=_get("LLM.ModelExplainer", "phi3"),
+    LLM_TEMPERATURE=float(_get("LLM.Temperature", 0.0)),
+    
+    VECTORSTORE_DIR=_get("VectorStore.Dir", "/var/lib/iracema/chroma"),
+
 )

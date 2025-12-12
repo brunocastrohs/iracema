@@ -1,28 +1,31 @@
 # External/vector/chromadb_vector_store.py
 
-import chromadb
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
+from typing import Optional, Dict, Any
+
 
 from External.vector.vector_store_base import VectorStoreBase
 
 
-class ChromaDBVectorStore(VectorStoreBase):
-    """
-    Encapsula ChromaDB e provê um retriever LangChain.
-    """
+from typing import Optional, Dict, Any
 
-    def __init__(self, persist_directory: str, model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
+class ChromaDBVectorStore:
+    def __init__(self, persist_directory: str):
         self.persist_directory = persist_directory
+        self._vs = None  # aqui fica o Chroma do LangChain
 
-        self.client = chromadb.PersistentClient(path=persist_directory)
-        self.embedding = HuggingFaceEmbeddings(model_name=model_name)
+    def _ensure_vs(self):
+        if self._vs is not None:
+            return
 
-        self.db = Chroma(
-            client=self.client,
-            collection_name="iracema_collection",
-            embedding_function=self.embedding,
+        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
+        self._vs = Chroma(
+            persist_directory=self.persist_directory,
+            embedding_function=embeddings,
         )
 
-    def as_retriever(self):
-        return self.db.as_retriever(search_kwargs={"k": 5})
+    def as_retriever(self, search_kwargs: Optional[Dict[str, Any]] = None):
+        self._ensure_vs()
+        return self._vs.as_retriever(search_kwargs=search_kwargs or {})

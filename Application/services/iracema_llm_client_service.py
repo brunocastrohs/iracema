@@ -2,50 +2,50 @@
 
 from typing import List, Dict, Any
 
-from External.ai.llm_provider_base import LLMProviderBase
-
+from Application.interfaces.i_iracema_llm_client import IIracemaLLMClient
 from Application.helpers.iracema_prompt_helper import (
     build_sql_generation_prompt,
     build_explanation_prompt,
 )
-from Application.interfaces.i_iracema_llm_client import IIracemaLLMClient
+from External.ai.langchain_phi3_provider import LangChainPhi3Provider
 
 
 class IracemaLLMClient(IIracemaLLMClient):
     """
     Orquestrador semântico da Iracema.
 
-    - Monta o prompt de geração de SQL.
-    - Monta o prompt de explicação do resultado.
-    - Chama um provider de LLM da camada External (OpenAI, Phi-3, LangChain, etc.).
+    Responsabilidades:
+    - Montar prompts (SQL e explicação)
+    - Acionar o provider de LLM
+    - Retornar respostas puras (sem formatação de API)
     """
 
-    def __init__(
-        self,
-        provider: LLMProviderBase,
-        model_sql: str,
-        model_explainer: str | None = None,
-    ) -> None:
-        self._provider = provider
-        self._model_sql = model_sql
-        self._model_explainer = model_explainer or model_sql
+    def __init__(self, vector_store, settings):
+        self.settings = settings
 
-    async def generate_sql(self, question: str, top_k: int) -> str:
+        retriever = vector_store.as_retriever(
+            search_kwargs={"k": 5}  # default; pode ser sobrescrito no prompt
+        )
+
+        # Provider único (mesmo modelo pode servir aos dois fluxos)
+        self.llm = LangChainPhi3Provider(
+            model=settings.LLM_MODEL_SQL,
+            base_url=settings.LLM_BASE_URL,
+            retriever=retriever,
+            temperature=settings.LLM_TEMPERATURE,
+        )
+
+    def generate_sql(self, question: str, top_k: int) -> str:
         """
-        Gera um comando SQL SELECT válido para PostgreSQL a partir da pergunta.
+        Gera um comando SQL SELECT válido para PostgreSQL.
         """
         prompt = build_sql_generation_prompt(question, top_k)
 
-        sql = await self._provider.chat_completion(
-            system_prompt="Você é um gerador de SQL para PostgreSQL.",
-            user_prompt=prompt,
-            model=self._model_sql,
-            temperature=0.1,
-        )
+        sql = self.llm.invoke(prompt)
 
         return sql.strip()
 
-    async def explain_result(
+    def explain_result(
         self,
         question: str,
         sql_executed: str,
@@ -53,15 +53,15 @@ class IracemaLLMClient(IIracemaLLMClient):
         rowcount: int,
     ) -> str:
         """
-        Gera uma resposta em linguagem natural explicando o resultado da consulta.
+        Gera uma explicação em linguagem natural do resultado SQL.
         """
-        prompt = build_explanation_prompt(question, sql_executed, rows, rowcount)
-
-        answer = await self._provider.chat_completion(
-            system_prompt="Você é um assistente que explica resultados de consultas SQL.",
-            user_prompt=prompt,
-            model=self._model_explainer,
-            temperature=0.2,
+        prompt = build_explanation_prompt(
+            question=question,
+            sql_executed=sql_executed,
+            rows=rows,
+            rowcount=rowcount,
         )
+
+        answer = self.llm.invoke(prompt)
 
         return answer.strip()

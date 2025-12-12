@@ -2,7 +2,7 @@
 
 import re
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import text
 
@@ -26,17 +26,13 @@ from Application.interfaces.i_iracema_llm_client import IIracemaLLMClient
 from Application.mappings.iracema_mappings import build_ask_response_dto
 
 
-# Regex simples para garantir que o SQL começa com SELECT
 SQL_SELECT_PATTERN = re.compile(r"^\s*select\s", re.IGNORECASE)
 
 
 def _is_safe_select(sql: str) -> bool:
-    """
-    Verificação simples para garantir que o comando é apenas um SELECT.
-    Não substitui um parser SQL real, mas evita DDL/DML mais óbvios.
-    """
-    # mais de um comando?
     stripped = sql.strip()
+
+    # mais de um comando?
     if ";" in stripped[:-1]:
         return False
 
@@ -50,7 +46,7 @@ def _is_safe_select(sql: str) -> bool:
 
 class IracemaAskService(IIracemaAskService):
     """
-    Implementação do fluxo principal do Iracema:
+    Fluxo principal:
       pergunta → gera SQL → executa no PostgreSQL → explica resultado.
     """
 
@@ -61,7 +57,7 @@ class IracemaAskService(IIracemaAskService):
         message_repo: IIracemaMessageRepository,
         sql_log_repo: IIracemaSQLLogRepository,
         llm_client: IIracemaLLMClient,
-        llm_provider: LLMProviderEnum = LLMProviderEnum.OPENAI,
+        llm_provider: LLMProviderEnum = LLMProviderEnum.OLLAMA,
         llm_model: LLMModelEnum = LLMModelEnum.PHI_3,
     ) -> None:
         self._db_context = db_context
@@ -72,15 +68,15 @@ class IracemaAskService(IIracemaAskService):
         self._llm_provider = llm_provider
         self._llm_model = llm_model
 
-    async def ask(self, request: IracemaAskRequestDto) -> IracemaAskResponseDto:
+    def ask(self, request: IracemaAskRequestDto) -> IracemaAskResponseDto:
         session = self._db_context.create_session()
-        connection = None
 
         question = request.question
-        error_message: str | None = None
+        error_message: Optional[str] = None
         sql_executed = ""
         rows: List[Dict[str, Any]] = []
         rowcount = 0
+        answer_text = ""
 
         try:
             # 1) Obter ou criar conversa
@@ -105,8 +101,8 @@ class IracemaAskService(IIracemaAskService):
                 content=question,
             )
 
-            # 3) Chamar LLM para gerar SQL
-            sql_executed = await self._llm_client.generate_sql(
+            # 3) Gerar SQL (SYNC)
+            sql_executed = self._llm_client.generate_sql(
                 question=question,
                 top_k=request.top_k,
             )
@@ -116,13 +112,12 @@ class IracemaAskService(IIracemaAskService):
 
             # 4) Executar SQL no banco
             start = time.perf_counter()
-            connection = self._db_context.engine.connect()
+            with self._db_context.engine.connect() as connection:
+                result = connection.execute(text(sql_executed))
+                columns = result.keys()
+                rows = [dict(zip(columns, row)) for row in result.fetchall()]
 
-            result = connection.execute(text(sql_executed))
-            columns = result.keys()
-            rows = [dict(zip(columns, row)) for row in result.fetchall()]
             rowcount = len(rows)
-
             duration_ms = (time.perf_counter() - start) * 1000.0
 
             # 5) Log de sucesso
@@ -139,8 +134,8 @@ class IracemaAskService(IIracemaAskService):
                 error_message=None,
             )
 
-            # 6) Chamar LLM para explicar o resultado
-            answer_text = await self._llm_client.explain_result(
+            # 6) Explicar resultado (SYNC)
+            answer_text = self._llm_client.explain_result(
                 question=question,
                 sql_executed=sql_executed,
                 rows=rows,
@@ -156,14 +151,13 @@ class IracemaAskService(IIracemaAskService):
             )
 
         except Exception as ex:
-            # captura erro e gera resposta amigável
             error_message = str(ex)
             answer_text = (
                 "Ocorreu um erro ao processar sua pergunta. "
                 "A equipe técnica será notificada."
             )
 
-            # garante que temos conversa e mensagens
+            # garante que temos conversa e msg do usuário
             if "conversation" not in locals():
                 conversation = self._conversation_repo.create(
                     session, title=question[:120]
@@ -199,8 +193,6 @@ class IracemaAskService(IIracemaAskService):
             )
 
         finally:
-            if connection is not None:
-                connection.close()
             session.close()
 
         # Preview das linhas (limitado a top_k)

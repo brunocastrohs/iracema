@@ -1,8 +1,6 @@
-# Presentation/API/controllers/iracema_controller.py
-
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from Application.dto.iracema_ask_dto import (
     IracemaAskRequestDto,
@@ -16,13 +14,6 @@ from Presentation.API.helpers.iracema_dependencies_helper import (
 )
 
 router = APIRouter()
-
-@router.get("/health", tags=["Iracema"])
-def health_check() -> Dict[str, str]:
-    """
-    Endpoint simples de healthcheck da API do Iracema.
-    """
-    return {"status": "ok"}
 
 
 @router.post(
@@ -41,5 +32,9 @@ async def ask_iracema(
     - Requer autenticação Bearer (token emitido pelo /auth/login).
     - Orquestra pergunta → SQL → PostgreSQL → explicação em linguagem natural.
     """
-    # `user` contém o payload do JWT; dá pra usar user["sub"] no futuro.
-    return await service.ask(body)
+    try:
+        # service.ask é síncrono
+        return service.ask(body)
+    except Exception as ex:
+        # fallback defensivo (idealmente logar aqui)
+        raise HTTPException(status_code=500, detail=str(ex))
