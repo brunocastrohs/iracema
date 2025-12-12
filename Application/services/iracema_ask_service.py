@@ -1,6 +1,5 @@
 # Application/services/iracema_ask_service.py
 
-import re
 import time
 from typing import Any, Dict, List, Optional
 
@@ -10,6 +9,7 @@ from Data.db_context import DbContext
 from Data.interfaces.i_iracema_conversation_repository import IIracemaConversationRepository
 from Data.interfaces.i_iracema_message_repository import IIracemaMessageRepository
 from Data.interfaces.i_iracema_sql_log_repository import IIracemaSQLLogRepository
+
 from Models.iracema_enums import (
     MessageRoleEnum,
     LLMProviderEnum,
@@ -25,31 +25,37 @@ from Application.interfaces.i_iracema_ask_service import IIracemaAskService
 from Application.interfaces.i_iracema_llm_client import IIracemaLLMClient
 from Application.mappings.iracema_mappings import build_ask_response_dto
 
+from Application.helpers.iracema_sql_policy_helper import plan_sql
 
-SQL_SELECT_PATTERN = re.compile(r"^\s*select\s", re.IGNORECASE)
 
+def _build_rows_summary(rows: List[Dict[str, Any]], top_k: int) -> Dict[str, Any]:
+    """
+    Resumo compacto para o LLM explainer (reduz tokens e melhora latência).
+    """
+    preview = rows[: min(len(rows), top_k)]
+    columns = list(preview[0].keys()) if preview else []
 
-def _is_safe_select(sql: str) -> bool:
-    stripped = sql.strip()
+    # Heurística: valores únicos se for 1 coluna (ex: DISTINCT zonas)
+    unique_values: Optional[List[Any]] = None
+    if preview and len(columns) == 1:
+        c = columns[0]
+        unique_values = []
+        seen = set()
+        for r in preview:
+            v = r.get(c)
+            if v not in seen:
+                seen.add(v)
+                unique_values.append(v)
 
-    # mais de um comando?
-    if ";" in stripped[:-1]:
-        return False
-
-    if not SQL_SELECT_PATTERN.match(stripped):
-        return False
-
-    forbidden = [" insert ", " update ", " delete ", " drop ", " alter ", " truncate "]
-    lower_sql = f" {stripped.lower()} "
-    return not any(tok in lower_sql for tok in forbidden)
+    return {
+        "columns": columns,
+        "preview": preview,
+        "preview_count": len(preview),
+        "unique_values_preview": unique_values,
+    }
 
 
 class IracemaAskService(IIracemaAskService):
-    """
-    Fluxo principal:
-      pergunta → gera SQL → executa no PostgreSQL → explica resultado.
-    """
-
     def __init__(
         self,
         db_context: DbContext,
@@ -73,10 +79,15 @@ class IracemaAskService(IIracemaAskService):
 
         question = request.question
         error_message: Optional[str] = None
+
         sql_executed = ""
         rows: List[Dict[str, Any]] = []
         rowcount = 0
         answer_text = ""
+
+        conversation = None
+        user_message = None
+        assistant_message = None
 
         try:
             # 1) Obter ou criar conversa
@@ -100,15 +111,24 @@ class IracemaAskService(IIracemaAskService):
                 role=MessageRoleEnum.USER,
                 content=question,
             )
+            session.flush()
 
-            # 3) Gerar SQL (SYNC)
-            sql_executed = self._llm_client.generate_sql(
-                question=question,
-                top_k=request.top_k,
-            )
+            # 3) Planner → decide se precisa LLM SQL
+            #    (para distinct/count, planner gera SQL template e pula LLM)
+            raw_sql = None
 
-            if not _is_safe_select(sql_executed):
-                raise ValueError("O modelo gerou um SQL potencialmente inseguro.")
+            # Só chama LLM SQL se NÃO for template.
+            # A estratégia: tenta planejar sem sql (templates), se cair em llm_sql_with_policy
+            # aí sim pede sql ao LLM e replana com raw_sql.
+            tentative_plan = plan_sql(question=question, raw_sql_from_llm=None, top_k=request.top_k)
+
+            if tentative_plan.used_template:
+                sql_plan = tentative_plan
+            else:
+                raw_sql = self._llm_client.generate_sql(question=question, top_k=request.top_k)
+                sql_plan = plan_sql(question=question, raw_sql_from_llm=raw_sql, top_k=request.top_k)
+
+            sql_executed = sql_plan.sql
 
             # 4) Executar SQL no banco
             start = time.perf_counter()
@@ -120,7 +140,7 @@ class IracemaAskService(IIracemaAskService):
             rowcount = len(rows)
             duration_ms = (time.perf_counter() - start) * 1000.0
 
-            # 5) Log de sucesso
+            # 5) Log de sucesso (inclui reason do planner)
             self._sql_log_repo.log_sql(
                 session=session,
                 conversation_id=conversation.id,
@@ -131,14 +151,16 @@ class IracemaAskService(IIracemaAskService):
                 rowcount=rowcount,
                 duration_ms=duration_ms,
                 status=QueryStatusEnum.SUCCESS,
-                error_message=None,
+                error_message=f"planner:{sql_plan.reason}",
             )
 
-            # 6) Explicar resultado (SYNC)
+            # 6) Explicar resultado (envia resumo, não tudo)
+            rows_summary = _build_rows_summary(rows, request.top_k)
+
             answer_text = self._llm_client.explain_result(
                 question=question,
                 sql_executed=sql_executed,
-                rows=rows,
+                rows=rows_summary["preview"],      # preview apenas
                 rowcount=rowcount,
             )
 
@@ -149,6 +171,7 @@ class IracemaAskService(IIracemaAskService):
                 role=MessageRoleEnum.ASSISTANT,
                 content=answer_text,
             )
+            session.flush()
 
         except Exception as ex:
             error_message = str(ex)
@@ -157,19 +180,20 @@ class IracemaAskService(IIracemaAskService):
                 "A equipe técnica será notificada."
             )
 
-            # garante que temos conversa e msg do usuário
-            if "conversation" not in locals():
+            if conversation is None:
                 conversation = self._conversation_repo.create(
                     session, title=question[:120]
                 )
+                session.flush()
 
-            if "user_message" not in locals():
+            if user_message is None:
                 user_message = self._message_repo.add_message(
                     session=session,
                     conversation_id=conversation.id,
                     role=MessageRoleEnum.USER,
                     content=question,
                 )
+                session.flush()
 
             assistant_message = self._message_repo.add_message(
                 session=session,
@@ -177,8 +201,8 @@ class IracemaAskService(IIracemaAskService):
                 role=MessageRoleEnum.ASSISTANT,
                 content=answer_text,
             )
+            session.flush()
 
-            # log de erro
             self._sql_log_repo.log_sql(
                 session=session,
                 conversation_id=conversation.id,
@@ -192,13 +216,10 @@ class IracemaAskService(IIracemaAskService):
                 error_message=error_message,
             )
 
-        finally:
-            session.close()
-
-        # Preview das linhas (limitado a top_k)
+        # Preview limitado (para retornar ao client)
         result_preview: List[Dict[str, Any]] = rows[: min(len(rows), request.top_k)]
 
-        return build_ask_response_dto(
+        response = build_ask_response_dto(
             conversation=conversation,
             user_message=user_message,
             assistant_message=assistant_message,
@@ -209,3 +230,6 @@ class IracemaAskService(IIracemaAskService):
             result_preview=result_preview,
             error=error_message,
         )
+
+        session.close()
+        return response

@@ -11,6 +11,12 @@
 #pip uninstall -y langchain langchain-core langchain-community langchain-openai openai
 #pip cache purge
 
+#AUX
+#nvidia-smi
+#htop
+#ollama pull qwen2.5:7b-q4
+#ollama pull phi3
+
 
 #Startar
 # source .venv/bin/activate && uvicorn Presentation.API.main:app --host 0.0.0.0 --port 9090 --reload

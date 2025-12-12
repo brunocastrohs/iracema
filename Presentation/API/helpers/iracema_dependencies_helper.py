@@ -79,13 +79,13 @@ _sql_log_repo = IracemaSQLLogRepository(_db_context)
 
 # Vector store (Chroma persistente)
 # DICA DEV: use algo como ~/.iracema/chroma para evitar permissão em /var/lib
-_vector_store = ChromaDBVectorStore(
-    persist_directory=getattr(settings, "VECTORSTORE_DIR", "/var/lib/iracema/chroma")
-)
+#_vector_store = ChromaDBVectorStore(
+#    persist_directory=getattr(settings, "VECTORSTORE_DIR", "/var/lib/iracema/chroma")
+#)
 
 # Cliente LLM (orquestra provider + prompts)
 _llm_client = IracemaLLMClient(
-    vector_store=_vector_store,
+    #vector_store=_vector_store,
     settings=settings,
 )
 
@@ -97,7 +97,7 @@ _ask_service: IIracemaAskService = IracemaAskService(
     sql_log_repo=_sql_log_repo,
     llm_client=_llm_client,
     llm_provider=LLMProviderEnum.OLLAMA,  # para log/auditoria
-    llm_model=LLMModelEnum.PHI_3,         # para log/auditoria
+    llm_model=LLMModelEnum.OTHER,         # para log/auditoria
 )
 
 
