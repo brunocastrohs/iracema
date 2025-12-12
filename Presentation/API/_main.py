@@ -5,6 +5,11 @@
 #export ENVIRONMENT=dev PYTHONPATH=$PWD
 #uvicorn Presentation.API.main:app --host 0.0.0.0 --port 9090 --reload
 
+#UNINSTALL
+#pip uninstall -y langchain langchain-core langchain-community langchain-openai openai
+#pip cache purge
+
+
 #Startar
 # source .venv/bin/activate && uvicorn Presentation.API.main:app --host 0.0.0.0 --port 9090 --reload
 
