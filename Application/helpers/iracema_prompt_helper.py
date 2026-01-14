@@ -85,7 +85,7 @@ def build_explanation_prompt(
         table_text = "(sem linhas de exemplo)"
 
     return f"""
-Você recebeu o resultado de uma consulta SQL executada sobre a tabela ZEEC.
+Você recebeu o resultado de uma consulta SQL executada sobre o dataset escolhido.
 
 Pergunta original do usuário:
 \"\"\"{question}\"\"\"

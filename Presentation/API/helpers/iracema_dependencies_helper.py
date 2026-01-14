@@ -11,7 +11,7 @@ from Data.repositories.iracema_conversation_repository import IracemaConversatio
 from Data.repositories.iracema_message_repository import IracemaMessageRepository
 from Data.repositories.iracema_sql_log_repository import IracemaSQLLogRepository
 
-from Models.iracema_enums import LLMProviderEnum, LLMModelEnum
+from Domain.iracema_enums import LLMProviderEnum, LLMModelEnum
 
 from Application.interfaces.i_iracema_ask_service import IIracemaAskService
 from Application.services.iracema_ask_service import IracemaAskService

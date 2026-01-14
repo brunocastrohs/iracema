@@ -2,9 +2,9 @@
 
 from typing import Dict, Any, List
 
-from Models.iracema_conversation_model import IracemaConversation
-from Models.iracema_message_model import IracemaMessage
-from Models.iracema_sql_log_model import IracemaSQLLog
+from Domain.iracema_conversation_model import IracemaConversation
+from Domain.iracema_message_model import IracemaMessage
+from Domain.iracema_sql_log_model import IracemaSQLLog
 
 from Application.dto.iracema_conversation_dto import IracemaConversationDto
 from Application.dto.iracema_message_dto import IracemaMessageDto

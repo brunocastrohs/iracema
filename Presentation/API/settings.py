@@ -43,6 +43,7 @@ class _Settings(BaseModel):
     
     VECTORSTORE_DIR: str = Field(default="/var/lib/iracema/chroma")
 
+    TOP_K: int = Field(default=10)
 
 
 def _load_json(path: Path) -> dict:
@@ -78,6 +79,8 @@ settings = _Settings(
     DB_USER=_get("Database.User"),
     DB_PASSWORD=_get("Database.Password"),
     DB_NAME=_get("Database.Name"),
+    
+    TOP_K=_get("TOP_K"),
 
     # API
     API_TITLE=_get("Api.Title", "Iracema API"),

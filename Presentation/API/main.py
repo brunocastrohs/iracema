@@ -16,6 +16,7 @@
 #htop
 #ollama pull qwen2.5:7b-q4
 #ollama pull phi3
+#ollama pull tinyllama
 
 
 #Startar

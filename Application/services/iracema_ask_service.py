@@ -6,11 +6,11 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import text
 
 from Data.db_context import DbContext
-from Data.interfaces.i_iracema_conversation_repository import IIracemaConversationRepository
-from Data.interfaces.i_iracema_message_repository import IIracemaMessageRepository
-from Data.interfaces.i_iracema_sql_log_repository import IIracemaSQLLogRepository
+from Domain.interfaces.i_iracema_conversation_repository import IIracemaConversationRepository
+from Domain.interfaces.i_iracema_message_repository import IIracemaMessageRepository
+from Domain.interfaces.i_iracema_sql_log_repository import IIracemaSQLLogRepository
 
-from Models.iracema_enums import (
+from Domain.iracema_enums import (
     MessageRoleEnum,
     LLMProviderEnum,
     LLMModelEnum,

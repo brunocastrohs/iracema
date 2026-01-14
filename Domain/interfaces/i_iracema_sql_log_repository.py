@@ -6,8 +6,8 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from Models.iracema_sql_log_model import IracemaSQLLog
-from Models.iracema_enums import (
+from Domain.iracema_sql_log_model import IracemaSQLLog
+from Domain.iracema_enums import (
     LLMProviderEnum,
     LLMModelEnum,
     QueryStatusEnum,

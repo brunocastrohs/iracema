@@ -7,13 +7,13 @@ from sqlalchemy import asc
 from sqlalchemy.orm import Session
 
 from Data.db_context import DbContext
-from Models.iracema_sql_log_model import IracemaSQLLog
-from Models.iracema_enums import (
+from Domain.iracema_sql_log_model import IracemaSQLLog
+from Domain.iracema_enums import (
     LLMProviderEnum,
     LLMModelEnum,
     QueryStatusEnum,
 )
-from Data.interfaces.i_iracema_sql_log_repository import IIracemaSQLLogRepository
+from Domain.interfaces.i_iracema_sql_log_repository import IIracemaSQLLogRepository
 
 
 class IracemaSQLLogRepository(IIracemaSQLLogRepository):

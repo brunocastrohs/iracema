@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from Models.iracema_enums import MessageRoleEnum
+from Domain.iracema_enums import MessageRoleEnum
 
 
 class IracemaMessageDto(BaseModel):

@@ -7,9 +7,9 @@ from sqlalchemy import asc
 from sqlalchemy.orm import Session
 
 from Data.db_context import DbContext
-from Models.iracema_message_model import IracemaMessage
-from Models.iracema_enums import MessageRoleEnum
-from Data.interfaces.i_iracema_message_repository import IIracemaMessageRepository
+from Domain.iracema_message_model import IracemaMessage
+from Domain.iracema_enums import MessageRoleEnum
+from Domain.interfaces.i_iracema_message_repository import IIracemaMessageRepository
 
 
 class IracemaMessageRepository(IIracemaMessageRepository):

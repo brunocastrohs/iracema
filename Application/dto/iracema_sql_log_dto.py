@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from Models.iracema_enums import (
+from Domain.iracema_enums import (
     LLMProviderEnum,
     LLMModelEnum,
     QueryStatusEnum,

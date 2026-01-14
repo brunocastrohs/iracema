@@ -6,8 +6,8 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from Data.db_context import DbContext
-from Models.iracema_conversation_model import IracemaConversation
-from Data.interfaces.i_iracema_conversation_repository import IIracemaConversationRepository
+from Domain.iracema_conversation_model import IracemaConversation
+from Domain.interfaces.i_iracema_conversation_repository import IIracemaConversationRepository
 
 
 class IracemaConversationRepository(IIracemaConversationRepository):
