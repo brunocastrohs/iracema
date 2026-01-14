@@ -23,3 +23,20 @@ class IracemaConversationRepository(IIracemaConversationRepository):
 
     def get_by_id(self, session: Session, conversation_id: UUID) -> Optional[IracemaConversation]:
         return session.get(IracemaConversation, conversation_id)
+
+    def get_or_create(
+        self,
+        session: Session,
+        conversation_id: Optional[UUID],
+        title: Optional[str] = None,
+    ) -> IracemaConversation:
+        if conversation_id is None:
+            return self.create(session=session, title=title)
+
+        existing = self.get_by_id(session=session, conversation_id=conversation_id)
+        if existing is not None:
+            return existing
+
+        # decisão: criar nova conversa se não existir (mais amigável para /start)
+        # se você preferir erro, troque por raise
+        return self.create(session=session, title=title)
