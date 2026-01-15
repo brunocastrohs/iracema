@@ -19,6 +19,13 @@ from Application.services.iracema_llm_client_service import IracemaLLMClient
 
 from External.vector.chromadb_vector_store import ChromaDBVectorStore
 
+from Application.interfaces.i_iracema_start_service import IIracemaStartService
+from Application.services.iracema_start_service import IracemaStartService
+
+from Data.repositories.iracema_datasource_repository import IracemaDataSourceRepository
+from Data.repositories.iracema_conversation_context_repository import (
+    IracemaConversationContextRepository,
+)
 
 # -----------------------------------------------------------------------------
 # Auth (JWT Bearer)
@@ -76,6 +83,8 @@ _db_context = DbContext(
 _conversation_repo = IracemaConversationRepository(_db_context)
 _message_repo = IracemaMessageRepository(_db_context)
 _sql_log_repo = IracemaSQLLogRepository(_db_context)
+_datasource_repo = IracemaDataSourceRepository(_db_context)
+_context_repo = IracemaConversationContextRepository(_db_context)
 
 # Vector store (Chroma persistente)
 # DICA DEV: use algo como ~/.iracema/chroma para evitar permissão em /var/lib
@@ -100,6 +109,16 @@ _ask_service: IIracemaAskService = IracemaAskService(
     llm_model=LLMModelEnum.OTHER,         # para log/auditoria
 )
 
+_start_service: IIracemaStartService = IracemaStartService(
+    db_context=_db_context,
+    conversation_repo=_conversation_repo,
+    message_repo=_message_repo,
+    datasource_repo=_datasource_repo,
+    context_repo=_context_repo,
+)
 
 def get_iracema_ask_service() -> IIracemaAskService:
     return _ask_service
+
+def get_iracema_start_service() -> IIracemaStartService:
+    return _start_service

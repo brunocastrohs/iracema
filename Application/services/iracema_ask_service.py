@@ -24,6 +24,8 @@ from Application.dto.iracema_ask_dto import (
 from Application.interfaces.i_iracema_ask_service import IIracemaAskService
 from Application.interfaces.i_iracema_llm_client import IIracemaLLMClient
 from Application.mappings.iracema_mappings import build_ask_response_dto
+from Domain.interfaces.i_iracema_datasource_repository import IIracemaDataSourceRepository
+from Application.helpers.iracema_table_name_helper import build_table_fqn
 
 from Application.helpers.iracema_sql_policy_helper import plan_sql
 
@@ -62,6 +64,7 @@ class IracemaAskService(IIracemaAskService):
         conversation_repo: IIracemaConversationRepository,
         message_repo: IIracemaMessageRepository,
         sql_log_repo: IIracemaSQLLogRepository,
+        datasource_repo: IIracemaDataSourceRepository,  # 🆕
         llm_client: IIracemaLLMClient,
         llm_provider: LLMProviderEnum = LLMProviderEnum.OLLAMA,
         llm_model: LLMModelEnum = LLMModelEnum.PHI_3,
@@ -70,6 +73,7 @@ class IracemaAskService(IIracemaAskService):
         self._conversation_repo = conversation_repo
         self._message_repo = message_repo
         self._sql_log_repo = sql_log_repo
+        self._datasource_repo = datasource_repo
         self._llm_client = llm_client
         self._llm_provider = llm_provider
         self._llm_model = llm_model
@@ -78,6 +82,23 @@ class IracemaAskService(IIracemaAskService):
         session = self._db_context.create_session()
 
         question = request.question
+        
+        ds = self._datasource_repo.get_by_table_identifier(
+            session=session,
+            table_identifier=request.table_identifier,
+        )
+
+        if ds is None or not ds.is_ativo:
+            raise ValueError(
+                "table_identifier inválido ou datasource inativa. Execute /start para obter um identificador válido."
+            )
+
+        schema_description = ds.prompt_inicial or ""
+        if not schema_description.strip():
+            raise ValueError("Datasource não possui prompt_inicial configurado.")
+
+        table_fqn = build_table_fqn(request.table_identifier)
+        
         error_message: Optional[str] = None
 
         sql_executed = ""
@@ -120,13 +141,27 @@ class IracemaAskService(IIracemaAskService):
             # Só chama LLM SQL se NÃO for template.
             # A estratégia: tenta planejar sem sql (templates), se cair em llm_sql_with_policy
             # aí sim pede sql ao LLM e replana com raw_sql.
-            tentative_plan = plan_sql(question=question, raw_sql_from_llm=None, top_k=request.top_k)
+            tentative_plan = plan_sql(
+                table_fqn=table_fqn,
+                question=question,
+                raw_sql_from_llm=None,
+                top_k=request.top_k,
+            )
 
             if tentative_plan.used_template:
                 sql_plan = tentative_plan
             else:
-                raw_sql = self._llm_client.generate_sql(question=question, top_k=request.top_k)
-                sql_plan = plan_sql(question=question, raw_sql_from_llm=raw_sql, top_k=request.top_k)
+                raw_sql = self._llm_client.generate_sql(
+                    schema_description=schema_description,
+                    question=question,
+                    top_k=request.top_k,
+                )
+                sql_plan = plan_sql(
+                    table_fqn=table_fqn,
+                    question=question,
+                    raw_sql_from_llm=raw_sql,
+                    top_k=request.top_k,
+                )
 
             sql_executed = sql_plan.sql
 
@@ -158,9 +193,10 @@ class IracemaAskService(IIracemaAskService):
             rows_summary = _build_rows_summary(rows, request.top_k)
 
             answer_text = self._llm_client.explain_result(
+                schema_description=schema_description,
                 question=question,
                 sql_executed=sql_executed,
-                rows=rows_summary["preview"],      # preview apenas
+                rows=rows_summary["preview"],
                 rowcount=rowcount,
             )
 

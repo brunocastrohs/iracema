@@ -29,7 +29,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from Presentation.API.settings import settings
 from Presentation.API.controllers.auth_controller import router as auth_router
-from Presentation.API.controllers.iracema_controller import router as iracema_router
+from Presentation.API.controllers.ask_controller import router as ask_router
 
 
 app = FastAPI(title=settings.API_TITLE, version=settings.API_VERSION)
@@ -45,7 +45,7 @@ app.add_middleware(
 
 # Rotas com prefixo do settings
 app.include_router(auth_router, prefix=f"{settings.API_PREFIX}/auth", tags=["Auth"])
-app.include_router(iracema_router, prefix=f"{settings.API_PREFIX}/chat", tags=["Iracema"])
+app.include_router(ask_router, prefix=f"{settings.API_PREFIX}/chat", tags=["Iracema"])
 
 
 if __name__ == "__main__":

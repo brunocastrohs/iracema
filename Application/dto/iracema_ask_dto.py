@@ -12,11 +12,15 @@ class IracemaAskRequestDto(BaseModel):
     """
     question: str = Field(
         ...,
-        description="Pergunta em linguagem natural sobre os dados da tabela ZEEC."
+        description="Pergunta em linguagem natural sobre os dados das tabelas da PEDEA."
     )
     conversation_id: Optional[UUID] = Field(
         default=None,
         description="ID da conversa atual. Se vazio, o serviço pode criar uma nova."
+    )
+    table_identifier: str = Field(
+        ...,
+        description="Identificador da tabela selecionada no /start (datasources.identificador_tabela)."
     )
     top_k: int = Field(
         20,
