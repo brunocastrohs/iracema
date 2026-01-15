@@ -16,7 +16,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from Data.db_context import Base
-from Models.iracema_enums import LLMProviderEnum, LLMModelEnum, QueryStatusEnum
+from Domain.iracema_enums import LLMProviderEnum, LLMModelEnum, QueryStatusEnum
 
 
 class IracemaSQLLog(Base):

@@ -104,6 +104,7 @@ _ask_service: IIracemaAskService = IracemaAskService(
     conversation_repo=_conversation_repo,
     message_repo=_message_repo,
     sql_log_repo=_sql_log_repo,
+    datasource_repo=_datasource_repo,
     llm_client=_llm_client,
     llm_provider=LLMProviderEnum.OLLAMA,  # para log/auditoria
     llm_model=LLMModelEnum.OTHER,         # para log/auditoria

@@ -8,7 +8,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from Data.db_context import Base
-from Models.iracema_enums import MessageRoleEnum
+from Domain.iracema_enums import MessageRoleEnum
 
 
 class IracemaMessage(Base):

@@ -1,5 +1,6 @@
 # Presentation/API/main.py
-#Inicializar
+
+#Buildar
 #python3 -m venv .venv && source .venv/bin/activate
 #pip install -r Presentation/API/requirements.txt
 #export ENVIRONMENT=dev PYTHONPATH=$PWD
@@ -19,8 +20,8 @@
 #ollama pull tinyllama
 
 
-#Startar
-# source .venv/bin/activate && uvicorn Presentation.API.main:app --host 0.0.0.0 --port 9090 --reload
+#Rodar
+#source .venv/bin/activate && uvicorn Presentation.API.main:app --host 0.0.0.0 --port 9090 --reload
 
 import os
 import uvicorn
@@ -30,7 +31,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from Presentation.API.settings import settings
 from Presentation.API.controllers.auth_controller import router as auth_router
 from Presentation.API.controllers.ask_controller import router as ask_router
-
+from Presentation.API.controllers.start_controller import router as start_router
 
 app = FastAPI(title=settings.API_TITLE, version=settings.API_VERSION)
 
@@ -46,6 +47,8 @@ app.add_middleware(
 # Rotas com prefixo do settings
 app.include_router(auth_router, prefix=f"{settings.API_PREFIX}/auth", tags=["Auth"])
 app.include_router(ask_router, prefix=f"{settings.API_PREFIX}/chat", tags=["Iracema"])
+app.include_router(start_router, prefix=f"{settings.API_PREFIX}/chat", tags=["Iracema"])
+
 
 
 if __name__ == "__main__":
