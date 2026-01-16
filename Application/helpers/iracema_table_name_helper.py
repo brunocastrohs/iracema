@@ -7,7 +7,7 @@ def build_table_fqn(table_identifier: str, schema: str = "zcm") -> str:
 
     Ex:
     - input: 1201_ce_zeec_zoneamento_p_litora_2021_pol
-    - output: public."1201_ce_zeec_zoneamento_p_litora_2021_pol"
+    - output: zcm."1201_ce_zeec_zoneamento_p_litora_2021_pol"
     """
     if not table_identifier or not table_identifier.strip():
         raise ValueError("table_identifier vazio.")

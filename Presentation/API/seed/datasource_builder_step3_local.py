@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import psycopg2
 
-TOP_K = 50
+TOP_K = 1000
 
 DB = {
     "host": "localhost",
@@ -105,7 +105,7 @@ def get_table_columns(conn, schema: str, table: str) -> List[Dict[str, Any]]:
             is_nullable,
             ordinal_position
           FROM information_schema.columns
-          WHERE table_schema = %s AND table_name = %s
+          WHERE table_schema = %s AND table_name = %s AND column_name not ilike 'geom'
           ORDER BY ordinal_position;
         """, (schema, table))
         rows = cur.fetchall()
@@ -164,29 +164,19 @@ def build_prompt_inicial(table_name: str, cols: List[Dict[str, Any]]) -> str:
 
     schema_lines = "\n".join(lines) if lines else "(sem colunas detectadas)"
 
-    return f"""TABLE_NAME = '{table_name}'
+    return f"""Você é um assistente especializado na base de dados {table_name}. Trabalhe EXCLUSIVAMENTE com a tabela {table_name} no PostgreSQL. Campos/Atributos da tabela:
 
-SCHEMA_DESCRIPTION = f\"\"\"
-Você é um assistente especializado na base de dados {table_name}.
+            {schema_lines}
 
-Trabalhe EXCLUSIVAMENTE com a tabela {table_name} no PostgreSQL.
+            Regras importantes:
 
-Esquema da tabela:
-
-{schema_lines}
-
-ATENÇÃO: no MVP, NÃO utilize a coluna geom em nenhuma consulta (nem filtro, nem retorno).
-
-Regras importantes:
-
-1. Gere apenas comandos SQL do tipo SELECT (e agregações).
-2. NUNCA utilize INSERT, UPDATE, DELETE, DROP, ALTER ou comandos de definição de schema.
-3. Sempre referencie explicitamente o nome da tabela: {table_name}.
-4. Prefira filtros em colunas textuais usando ILIKE quando fizer sentido.
-5. Use aliases amigáveis (por exemplo: zona, subzona, area_total_km2).
-6. Respeite um LIMIT se o usuário não pedir agregações (por exemplo LIMIT {TOP_K}).
-\"\"\""""
-
+            1. Gere apenas comandos SQL do tipo SELECT (e agregações).
+            2. NUNCA utilize INSERT, UPDATE, DELETE, DROP, ALTER ou comandos de definição de schema.
+            3. Sempre referencie explicitamente o nome da tabela: {table_name}.
+            4. Prefira filtros em colunas textuais usando ILIKE quando fizer sentido.
+            5. Use aliases amigáveis.
+            6. Respeite um LIMIT se o usuário não pedir agregações (por exemplo LIMIT {TOP_K}).
+            """
 
 def update_datasource(conn, ident: str, cols: List[Dict[str, Any]], prompt_inicial: str) -> None:
     with conn.cursor() as cur:

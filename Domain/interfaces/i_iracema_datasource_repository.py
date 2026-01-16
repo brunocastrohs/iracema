@@ -47,3 +47,7 @@ class IIracemaDataSourceRepository(ABC):
         offset: int = 0,
     ) -> List[DataSource]:
         """Lista datasources ativas (fallback quando não houver query)."""
+
+    @abstractmethod
+    def list_all(self, session: Session, limit: int = 5000, offset: int = 0) -> List[DataSource]:
+        """Lista todas as datasources (ativas e inativas)."""

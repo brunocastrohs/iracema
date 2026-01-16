@@ -70,7 +70,7 @@ Quantidade de linhas retornadas: {rowcount}
 Prévia das primeiras linhas (máximo {max_preview}):
 {table_text}
 
-Agora, produza uma resposta clara e objetiva em português, explicando o significado desses resultados.
+Agora, em uma frase, produza uma resposta clara e objetiva em português, explicando o significado desses resultados.
 
 NÃO repita o SQL.
 

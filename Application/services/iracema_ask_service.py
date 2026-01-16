@@ -27,7 +27,7 @@ from Application.mappings.iracema_mappings import build_ask_response_dto
 from Domain.interfaces.i_iracema_datasource_repository import IIracemaDataSourceRepository
 from Application.helpers.iracema_table_name_helper import build_table_fqn
 
-from Application.helpers.iracema_sql_policy_helper import plan_sql
+from Application.helpers.iracema_sql_policy_helper import (plan_sql_template, sanitize_llm_sql)
 
 
 def _build_rows_summary(rows: List[Dict[str, Any]], top_k: int) -> Dict[str, Any]:
@@ -141,24 +141,23 @@ class IracemaAskService(IIracemaAskService):
             # Só chama LLM SQL se NÃO for template.
             # A estratégia: tenta planejar sem sql (templates), se cair em llm_sql_with_policy
             # aí sim pede sql ao LLM e replana com raw_sql.
-            tentative_plan = plan_sql(
+            """template_plan = plan_sql_template(
                 table_fqn=table_fqn,
+                columns_meta=ds.colunas_tabela,
                 question=question,
-                raw_sql_from_llm=None,
                 top_k=request.top_k,
             )
 
-            if tentative_plan.used_template:
-                sql_plan = tentative_plan
-            else:
-                raw_sql = self._llm_client.generate_sql(
+            if template_plan is not None:
+                sql_plan = template_plan
+            else:"""
+            raw_sql = self._llm_client.generate_sql(
                     schema_description=schema_description,
                     question=question,
                     top_k=request.top_k,
                 )
-                sql_plan = plan_sql(
+            sql_plan = sanitize_llm_sql(
                     table_fqn=table_fqn,
-                    question=question,
                     raw_sql_from_llm=raw_sql,
                     top_k=request.top_k,
                 )

@@ -70,3 +70,18 @@ class IracemaDataSourceRepository(IIracemaDataSourceRepository):
             .limit(limit)
             .all()
         )
+
+    def list_all(
+        self,
+        session: Session,
+        limit: int = 5000,
+        offset: int = 0,
+    ) -> List[DataSource]:
+        return (
+            session.query(DataSource)
+            .filter(DataSource.is_ativo.is_(True))
+            .order_by(DataSource.categoria_informacao.asc(), DataSource.titulo_tabela.asc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )

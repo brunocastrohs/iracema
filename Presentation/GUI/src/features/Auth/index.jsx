@@ -46,7 +46,7 @@ export default function Auth() {
       other.removeItem("iracema_token");
       other.removeItem("iracema_token_bearer");
 
-      navigate("/layers", { replace: true }); 
+      navigate("/chat", { replace: true }); 
     } catch (ex) {
       setError("Erro inesperado. Tente novamente mais tarde.");
     } finally {

@@ -1,0 +1,238 @@
+/* src/features/Chat/styles.css */
+
+.chat-page {
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  background: #0b0f17;
+}
+
+.chat-container {
+  width: min(980px, 100%);
+  height: calc(100vh - 64px); /* se teu Navigator ocupar algo, ajuste */
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 10px;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow: auto;
+  padding: 10px 6px;
+}
+
+.chat-bubble-row {
+  display: flex;
+  margin: 10px 0;
+}
+
+.chat-bubble-row.is-user {
+  justify-content: flex-end;
+}
+
+.chat-bubble-row.is-assistant {
+  justify-content: flex-start;
+}
+
+.chat-bubble {
+  max-width: 85%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  color: #e8eefc;
+}
+
+.chat-bubble.user {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+.chat-bubble.assistant {
+  background: rgba(255,255,255,0.03);
+}
+
+.chat-text {
+  white-space: pre-wrap;
+  line-height: 1.45;
+  font-size: 14px;
+}
+
+.suggestions {
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.suggestion-card {
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.02);
+}
+
+.suggestion-title {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.suggestion-path {
+  font-size: 12px;
+  opacity: 0.75;
+  margin-bottom: 8px;
+}
+
+.suggestion-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.tag {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.10);
+}
+
+.tag-outline {
+  background: transparent;
+}
+
+.suggestion-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-mini {
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.06);
+  color: #e8eefc;
+  cursor: pointer;
+}
+
+.btn-mini:hover {
+  background: rgba(255,255,255,0.10);
+}
+
+.followups {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.04);
+  color: #e8eefc;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.chip:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.chat-inputbar {
+  display: flex;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.10);
+}
+
+.chat-input {
+  flex: 1;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.04);
+  color: #e8eefc;
+  padding: 12px;
+  outline: none;
+}
+
+.chat-send {
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(99, 102, 241, 0.25);
+  color: #e8eefc;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
+.chat-send:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.chat-error {
+  font-size: 12px;
+  color: #ffb4b4;
+  opacity: 0.95;
+}
+
+.result-preview {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.10);
+}
+
+.result-preview-title {
+  font-size: 12px;
+  opacity: 0.8;
+  margin-bottom: 8px;
+}
+
+.result-preview-table-wrap {
+  overflow: auto;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.10);
+}
+
+.result-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.result-preview-table th,
+.result-preview-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  white-space: nowrap;
+}
+
+.result-preview-table th {
+  text-align: left;
+  font-weight: 700;
+  background: rgba(255,255,255,0.04);
+}
+
+.result-preview-table tr:hover td {
+  background: rgba(255,255,255,0.03);
+}
+
+.chat-reset {
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.06);
+  color: #e8eefc;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
+.chat-reset:hover {
+  background: rgba(255,255,255,0.10);
+}
+
+.chat-reset:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

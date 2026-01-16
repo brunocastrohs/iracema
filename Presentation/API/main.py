@@ -47,7 +47,7 @@ app.add_middleware(
 # Rotas com prefixo do settings
 app.include_router(auth_router, prefix=f"{settings.API_PREFIX}/auth", tags=["Auth"])
 app.include_router(ask_router, prefix=f"{settings.API_PREFIX}/chat", tags=["Iracema"])
-app.include_router(start_router, prefix=f"{settings.API_PREFIX}/chat", tags=["Iracema"])
+app.include_router(start_router, prefix=f"{settings.API_PREFIX}/start", tags=["Iracema"])
 
 
 

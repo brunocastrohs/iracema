@@ -25,7 +25,7 @@ class IracemaAskRequestDto(BaseModel):
     top_k: int = Field(
         20,
         ge=1,
-        le=200,
+        le=1200,
         description="Número máximo de linhas que a consulta SQL pode retornar."
     )
     language: str = Field(

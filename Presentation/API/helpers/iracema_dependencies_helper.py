@@ -27,6 +27,10 @@ from Data.repositories.iracema_conversation_context_repository import (
     IracemaConversationContextRepository,
 )
 
+from Application.interfaces.i_iracema_start_catalog_service import IIracemaStartCatalogService
+from Application.services.iracema_start_catalog_service import IracemaStartCatalogService
+
+
 # -----------------------------------------------------------------------------
 # Auth (JWT Bearer)
 # -----------------------------------------------------------------------------
@@ -118,8 +122,17 @@ _start_service: IIracemaStartService = IracemaStartService(
     context_repo=_context_repo,
 )
 
+_catalog_service: IIracemaStartCatalogService = IracemaStartCatalogService(
+    db_context=_db_context,
+    datasource_repo=_datasource_repo,
+    version="1.0",
+)
+
 def get_iracema_ask_service() -> IIracemaAskService:
     return _ask_service
 
 def get_iracema_start_service() -> IIracemaStartService:
     return _start_service
+
+def get_iracema_start_catalog_service() -> IIracemaStartCatalogService:
+    return _catalog_service

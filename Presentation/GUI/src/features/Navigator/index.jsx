@@ -29,15 +29,11 @@ export default function Navigator() {
         <nav>
           <ul>
             <li>
-              <NavLink to="/layers" className={({ isActive }) => (isActive ? "active" : "")}>
-                <i className="pi pi-map-marker" /> Camadas
+              <NavLink to="/chat" className={({ isActive }) => (isActive ? "active" : "")}>
+                <i className="pi pi-map-marker" /> Chat
               </NavLink>
             </li>
-            <li>
-              <NavLink to="/upload" className={({ isActive }) => (isActive ? "active" : "")}>
-                <i className="pi pi-map-marker" /> Importar
-              </NavLink>
-            </li>
+            
             {/*<li>
               <NavLink to="/history" className={({ isActive }) => (isActive ? "active" : "")}>
                 <i className="pi pi-clock" /> Histórico
