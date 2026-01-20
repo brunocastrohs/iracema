@@ -143,41 +143,62 @@ def get_table_columns(conn, schema: str, table: str) -> List[Dict[str, Any]]:
     return cols
 
 
-def build_prompt_inicial(table_name: str, cols: List[Dict[str, Any]]) -> str:
+from typing import List, Dict, Any, Optional
+
+def build_prompt_inicial(
+    table_name: str,
+    cols: List[Dict[str, Any]],
+    top_k: int = 50,
+    question_placeholder: str = "{PERGUNTA_DO_USUARIO}"
+) -> str:
     """
-    Gera o texto do prompt_inicial seguindo o template do usuário,
-    mas preenchendo o 'Esquema da tabela' dinamicamente a partir das colunas reais.
+    Gera o prompt inicial no MESMO template do sqlcoder (PT-BR),
+    preenchendo dinamicamente a seção ### Esquema com um CREATE TABLE
+    baseado nas colunas reais.
+
+    Espera que cada item de `cols` tenha, no mínimo:
+      - name: str
+      - type: str
+      - nullable: bool
+      - is_geometry: bool (opcional)
     """
-    # monta bullets do esquema
-    lines = []
-    for c in cols:
-        col_name = c["name"]
-        col_type = c["type"]
-        nullable = c["nullable"]
-        is_geom = c["is_geometry"]
+    def norm_bool(v: Any) -> bool:
+        return bool(v) if v is not None else False
 
-        null_txt = "NULL" if nullable else "NOT NULL"
-        if is_geom:
-            lines.append(f"- {col_name:<10} ({col_type}): geometria da feição. ({null_txt})")
-        else:
-            lines.append(f"- {col_name:<10} ({col_type}): ({null_txt})")
+    # Monta as linhas do CREATE TABLE
+    col_defs: List[str] = []
+    for c in cols or []:
+        col_name = str(c.get("name", "")).strip()
+        col_type = str(c.get("type", "TEXT")).strip() or "TEXT"
+        nullable = norm_bool(c.get("nullable", True))  # padrão: aceita NULL se não informado
 
-    schema_lines = "\n".join(lines) if lines else "(sem colunas detectadas)"
+        if not col_name:
+            continue
 
-    return f"""Você é um assistente especializado na base de dados {table_name}. Trabalhe EXCLUSIVAMENTE com a tabela {table_name} no PostgreSQL. Campos/Atributos da tabela:
+        null_sql = "" if nullable else " NOT NULL"
+        col_defs.append(f'  {col_name} {col_type}{null_sql}')
 
-            {schema_lines}
+    if col_defs:
+        create_table = "CREATE TABLE " + table_name + " (\n" + ",\n".join(col_defs) + "\n);"
+    else:
+        # fallback para não quebrar o template caso não detecte colunas
+        create_table = f"CREATE TABLE {table_name} (\n  -- (sem colunas detectadas)\n);"
 
-            Regras importantes:
+    return (
+        f"""### Tarefa
+        Escreva UMA consulta SELECT em PostgreSQL que responda à pergunta.
+        Retorne APENAS a consulta SQL.
 
-            1. Gere apenas comandos SQL do tipo SELECT (e agregações).
-            2. NUNCA utilize INSERT, UPDATE, DELETE, DROP, ALTER ou comandos de definição de schema.
-            3. Sempre referencie explicitamente o nome da tabela: {table_name}.
-            4. Prefira filtros em colunas textuais usando ILIKE quando fizer sentido.
-            5. Use aliases amigáveis.
-            6. Respeite um LIMIT se o usuário não pedir agregações (por exemplo LIMIT {TOP_K}).
-            """
+        ### Esquema
+        {create_table}
 
+        ### Pergunta
+        {question_placeholder}
+
+        ### SQL
+        """
+            )
+        
 def update_datasource(conn, ident: str, cols: List[Dict[str, Any]], prompt_inicial: str) -> None:
     with conn.cursor() as cur:
         cur.execute("""

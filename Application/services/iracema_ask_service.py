@@ -152,17 +152,20 @@ class IracemaAskService(IIracemaAskService):
                 sql_plan = template_plan
             else:"""
             raw_sql = self._llm_client.generate_sql(
-                    schema_description=schema_description,
-                    question=question,
-                    top_k=request.top_k,
-                )
+                        schema_description=schema_description,
+                        question=question,
+                        top_k=request.top_k,
+                    )
+            print(raw_sql)
             sql_plan = sanitize_llm_sql(
-                    table_fqn=table_fqn,
-                    raw_sql_from_llm=raw_sql,
-                    top_k=request.top_k,
-                )
+                        table_fqn=table_fqn,
+                        raw_sql_from_llm=raw_sql,
+                        top_k=request.top_k,
+                    )
 
             sql_executed = sql_plan.sql
+            
+            
 
             # 4) Executar SQL no banco
             start = time.perf_counter()
@@ -190,6 +193,7 @@ class IracemaAskService(IIracemaAskService):
 
             # 6) Explicar resultado (envia resumo, não tudo)
             rows_summary = _build_rows_summary(rows, request.top_k)
+            
 
             answer_text = self._llm_client.explain_result(
                 schema_description=schema_description,

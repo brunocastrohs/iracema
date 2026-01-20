@@ -272,21 +272,41 @@ def plan_sql_template(
 
     return None
 
+import re
+from typing import Optional
+
 def sanitize_llm_sql(table_fqn: str, raw_sql_from_llm: Optional[str], top_k: int) -> SqlPlan:
     """
     Normaliza e valida SQL vindo do LLM.
-    Não aplica heurística/template. Apenas policy de segurança.
+    Policy de segurança + garante schema quando table_fqn = schema.tabela.
     """
     sql = extract_sql(raw_sql_from_llm or "")
-    sql = ensure_limit(sql, top_k)
+    #sql = ensure_limit(sql, top_k)
 
     if not is_safe_select(sql):
         raise ValueError("O modelo gerou um SQL potencialmente inseguro.")
 
-    # (opcional, recomendado) garantir que a query referencia a tabela-alvo:
-    # isso evita o LLM inventar outra tabela / fazer join.
-    lower = sql.lower()
-    if table_fqn.lower() not in lower:
-        raise ValueError("SQL do modelo não referencia explicitamente a tabela alvo.")
+    # Se table_fqn tem schema (algo como "zcm"."tabela" ou zcm."tabela" ou zcm.tabela)
+    tokens = sql.split()
 
-    return SqlPlan(sql=sql, used_template=False, reason="llm_sql_sanitized")
+    # encontra FROM
+    try:
+        from_idx = next(i for i, t in enumerate(tokens) if t.lower() == "from")
+    except StopIteration:
+        raise ValueError("SQL do modelo não contém cláusula FROM.")
+
+    if from_idx + 1 >= len(tokens):
+        raise ValueError("SQL do modelo contém FROM inválido.")
+
+    # preserva possível pontuação (; ,)
+    table_token = tokens[from_idx + 1]
+    suffix = ""
+    while table_token and table_token[-1] in ";,":
+        suffix = table_token[-1] + suffix
+        table_token = table_token[:-1]
+
+    # FORÇA a tabela correta (descarta a do LLM)
+    tokens[from_idx + 1] = table_fqn + suffix
+    sql = " ".join(tokens)
+
+    return SqlPlan(sql=sql, used_template=False, reason="llm_sql_table_forced")
