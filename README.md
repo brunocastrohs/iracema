@@ -1,21 +1,3 @@
-Aqui está um **README.md profissional, completo e pronto para usar** no repositório do projeto **Iracema** — seguindo Clean Architecture, com explicações de stack, fluxo, instalação, execução, uso e arquitetura interna.
-
-Ele foi escrito considerando **todo o código que já desenvolvemos**, incluindo:
-
-* FastAPI
-* ChromaDB
-* LangChain
-* Phi-3 / Ollama
-* OpenAI API-like providers
-* Clean Architecture
-* Serviços Ask / LLM Client
-* Controllers
-* Dockerfile
-
-Caso queira que ele fique **mais resumido**, **mais técnico**, ou **com diagramas**, posso ajustar.
-
----
-
 # 📘 **Iracema — Sistema de Consultas Inteligentes sobre Zoneamento Costeiro (ZEEC/CE)**
 
 Iracema é um **chatbot geoespacial inteligente** que responde perguntas em linguagem natural sobre os dados de zoneamento costeiro do Ceará (ZEEC), utilizando:

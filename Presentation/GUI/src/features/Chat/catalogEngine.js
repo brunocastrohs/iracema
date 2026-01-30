@@ -112,11 +112,30 @@ export function buildIndex(docs) {
   return ms;
 }
 
+
+
+const STOPWORDS_PT = new Set([
+  "a","o","as","os","um","uma","uns","umas",
+  "de","da","do","das","dos",
+  "e","ou","em","no","na","nos","nas",
+  "por","para","com","sem","sobre","entre","até",
+  "que","se","ao","aos","à","às",
+  "não","sim","mais","menos",
+  "ser","estar","ter","há",
+]);
+
+function isUsefulToken(t) {
+  if (!t) return false;
+  // regra: aceita 2 letras só se NÃO for stopword
+  if (t.length >= 3) return true;
+  return t.length >= 2 && !STOPWORDS_PT.has(t);
+}
+
 function tokens(query) {
   return normalizeStr(query)
     .split(/\s+/)
     .map((x) => x.trim())
-    .filter((x) => x.length >= 2);
+    .filter(isUsefulToken);
 }
 
 /**
@@ -126,7 +145,8 @@ function tokens(query) {
  * - descrição presente
  */
 export function buildReason(query, doc) {
-  const q = tokens(query);
+  const q = tokens(query); // agora já vem filtrado
+
   const kw = (doc.keywords || []).map(normalizeStr);
   const cols = (doc.columns || []).map(normalizeStr);
 

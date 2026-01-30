@@ -111,17 +111,36 @@ def ensure_limit(sql: str, top_k: int) -> str:
         return s + ";"
     return f"{s}\nLIMIT {int(top_k)};"
 
-def detect_groupby_column(question: str, columns_meta: list[dict]) -> Optional[str]:
-    q = question or ""
-    cols = [c.get("name") for c in (columns_meta or []) if c.get("name") and not c.get("is_geometry")]
-    cols_lower = {c.lower(): c for c in cols}
 
-    # 1) se mencionou o nome da coluna explicitamente
-    for c_lc, c in cols_lower.items():
-        if c_lc in q.lower():
-            return c
+def _normalize_text(s: str) -> str:
+    # Mantém letras/números/_ e troca o resto por espaço
+    return re.sub(r"[^a-z0-9_]+", " ", (s or "").lower()).strip()
+
+def _token_boundary_pattern(col_name: str) -> re.Pattern:
+    # Garante que "pan" não case dentro de "nomepan"
+    # Ex: (?<![a-z0-9_])pan(?![a-z0-9_])
+    escaped = re.escape(col_name.lower())
+    return re.compile(rf"(?<![a-z0-9_]){escaped}(?![a-z0-9_])", re.IGNORECASE)
+
+def detect_groupby_column(question: str, columns_meta: list[dict]) -> Optional[str]:
+    q_norm = _normalize_text(question)
+
+    cols = [
+        c.get("name")
+        for c in (columns_meta or [])
+        if c.get("name") and not c.get("is_geometry")
+    ]
+
+    # 🔑 Prioriza colunas maiores primeiro (nomepan antes de pan)
+    cols_sorted = sorted(cols, key=lambda x: len(x), reverse=True)
+
+    for col in cols_sorted:
+        pat = _token_boundary_pattern(col)
+        if pat.search(q_norm):
+            return col
 
     return None
+
 
 def detect_target_column(question: str, columns_meta: list[dict]) -> Optional[str]:
     q = (question or "").lower()
@@ -237,6 +256,7 @@ def plan_sql_template(
     Retorna um SqlPlan template quando possível.
     Retorna None quando deve delegar ao LLM.
     """
+    print(columns_meta)
 
     if is_schema_question(question):
         sql = build_columns_query(table_fqn)
@@ -271,9 +291,6 @@ def plan_sql_template(
         return SqlPlan(sql=sql, used_template=True, reason="count_template")
 
     return None
-
-import re
-from typing import Optional
 
 def sanitize_llm_sql(table_fqn: str, raw_sql_from_llm: Optional[str], top_k: int) -> SqlPlan:
     """

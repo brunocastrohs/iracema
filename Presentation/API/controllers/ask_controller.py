@@ -38,3 +38,49 @@ async def ask_iracema(
     except Exception as ex:
         # fallback defensivo (idealmente logar aqui)
         raise HTTPException(status_code=500, detail=str(ex))
+
+@router.post(
+    "/ask/heuristic",
+    response_model=IracemaAskResponseDto,
+    tags=["Iracema"],
+)
+async def ask_iracema_heuristic(
+    body: IracemaAskRequestDto,
+    user: Dict[str, Any] = Depends(get_current_user),
+    service: IIracemaAskService = Depends(get_iracema_ask_service),
+) -> IracemaAskResponseDto:
+    """
+    Endpoint principal do chatbot Iracema.
+
+    - Requer autenticação Bearer (token emitido pelo /auth/login).
+    - Orquestra pergunta → SQL → PostgreSQL → explicação em linguagem natural.
+    """
+    try:
+        # service.ask é síncrono
+        return service.ask_heuristic(body)
+    except Exception as ex:
+        # fallback defensivo (idealmente logar aqui)
+        raise HTTPException(status_code=500, detail=str(ex))
+
+@router.post(
+    "/ask/ai",
+    response_model=IracemaAskResponseDto,
+    tags=["Iracema"],
+)
+async def ask_iracema_ai(
+    body: IracemaAskRequestDto,
+    user: Dict[str, Any] = Depends(get_current_user),
+    service: IIracemaAskService = Depends(get_iracema_ask_service),
+) -> IracemaAskResponseDto:
+    """
+    Endpoint principal do chatbot Iracema.
+
+    - Requer autenticação Bearer (token emitido pelo /auth/login).
+    - Orquestra pergunta → SQL → PostgreSQL → explicação em linguagem natural.
+    """
+    try:
+        # service.ask é síncrono
+        return service.ask_ai(body)
+    except Exception as ex:
+        # fallback defensivo (idealmente logar aqui)
+        raise HTTPException(status_code=500, detail=str(ex))

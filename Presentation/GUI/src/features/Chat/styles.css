@@ -92,15 +92,22 @@
 
 .tag {
   font-size: 12px;
+  white-space: nowrap;
+  max-width: 600px;
+  overflow-x: auto;
   padding: 4px 8px;
-  border-radius: 999px;
+  border-radius: 5px;
   background: rgba(255,255,255,0.08);
   border: 1px solid rgba(255,255,255,0.10);
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
 }
 
 .tag-outline {
   background: transparent;
 }
+
+
 
 .suggestion-actions {
   display: flex;

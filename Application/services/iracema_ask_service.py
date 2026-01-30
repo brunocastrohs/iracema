@@ -141,6 +141,202 @@ class IracemaAskService(IIracemaAskService):
             # Só chama LLM SQL se NÃO for template.
             # A estratégia: tenta planejar sem sql (templates), se cair em llm_sql_with_policy
             # aí sim pede sql ao LLM e replana com raw_sql.
+            template_plan = plan_sql_template(
+                table_fqn=table_fqn,
+                columns_meta=ds.colunas_tabela,
+                question=question,
+                top_k=request.top_k,
+            )
+
+            if template_plan is not None:
+                sql_plan = template_plan
+            else:
+                raw_sql = self._llm_client.generate_sql(
+                        schema_description=schema_description,
+                        question=question,
+                        top_k=request.top_k,
+                    )
+                sql_plan = sanitize_llm_sql(
+                        table_fqn=table_fqn,
+                        raw_sql_from_llm=raw_sql,
+                        top_k=request.top_k,
+                    )
+
+            
+
+            sql_executed = sql_plan.sql
+            
+            
+
+            # 4) Executar SQL no banco
+            start = time.perf_counter()
+            with self._db_context.engine.connect() as connection:
+                result = connection.execute(text(sql_executed))
+                columns = result.keys()
+                rows = [dict(zip(columns, row)) for row in result.fetchall()]
+
+            rowcount = len(rows)
+            duration_ms = (time.perf_counter() - start) * 1000.0
+
+            # 5) Log de sucesso (inclui reason do planner)
+            self._sql_log_repo.log_sql(
+                session=session,
+                conversation_id=conversation.id,
+                message_id=user_message.id,
+                provider=self._llm_provider,
+                model=self._llm_model,
+                sql_text=sql_executed,
+                rowcount=rowcount,
+                duration_ms=duration_ms,
+                status=QueryStatusEnum.SUCCESS,
+                error_message=f"planner:{sql_plan.reason}",
+            )
+
+            # 6) Explicar resultado (envia resumo, não tudo)
+            rows_summary = _build_rows_summary(rows, request.top_k)
+            
+
+            answer_text = self._llm_client.explain_result(
+                schema_description=schema_description,
+                question=question,
+                sql_executed=sql_executed,
+                rows=rows_summary["preview"],
+                rowcount=rowcount,
+            )
+
+            # 7) Registrar mensagem do assistente
+            assistant_message = self._message_repo.add_message(
+                session=session,
+                conversation_id=conversation.id,
+                role=MessageRoleEnum.ASSISTANT,
+                content=answer_text,
+            )
+            session.flush()
+
+        except Exception as ex:
+            error_message = str(ex)
+            answer_text = (
+                "Ocorreu um erro ao processar sua pergunta. "
+                "A equipe técnica será notificada."
+            )
+
+            if conversation is None:
+                conversation = self._conversation_repo.create(
+                    session, title=question[:120]
+                )
+                session.flush()
+
+            if user_message is None:
+                user_message = self._message_repo.add_message(
+                    session=session,
+                    conversation_id=conversation.id,
+                    role=MessageRoleEnum.USER,
+                    content=question,
+                )
+                session.flush()
+
+            assistant_message = self._message_repo.add_message(
+                session=session,
+                conversation_id=conversation.id,
+                role=MessageRoleEnum.ASSISTANT,
+                content=answer_text,
+            )
+            session.flush()
+
+            self._sql_log_repo.log_sql(
+                session=session,
+                conversation_id=conversation.id,
+                message_id=user_message.id,
+                provider=self._llm_provider,
+                model=self._llm_model,
+                sql_text=sql_executed or "",
+                rowcount=rowcount,
+                duration_ms=0.0,
+                status=QueryStatusEnum.ERROR,
+                error_message=error_message,
+            )
+
+        # Preview limitado (para retornar ao client)
+        result_preview: List[Dict[str, Any]] = rows[: min(len(rows), request.top_k)]
+
+        response = build_ask_response_dto(
+            conversation=conversation,
+            user_message=user_message,
+            assistant_message=assistant_message,
+            question=question,
+            answer_text=answer_text,
+            sql_executed=sql_executed,
+            rowcount=rowcount,
+            result_preview=result_preview,
+            error=error_message,
+        )
+
+        session.close()
+        return response
+
+    def ask_ai(self, request: IracemaAskRequestDto) -> IracemaAskResponseDto:
+        session = self._db_context.create_session()
+
+        question = request.question
+        
+        ds = self._datasource_repo.get_by_table_identifier(
+            session=session,
+            table_identifier=request.table_identifier,
+        )
+
+        if ds is None or not ds.is_ativo:
+            raise ValueError(
+                "table_identifier inválido ou datasource inativa. Execute /start para obter um identificador válido."
+            )
+
+        schema_description = ds.prompt_inicial or ""
+        if not schema_description.strip():
+            raise ValueError("Datasource não possui prompt_inicial configurado.")
+
+        table_fqn = build_table_fqn(request.table_identifier)
+        
+        error_message: Optional[str] = None
+
+        sql_executed = ""
+        rows: List[Dict[str, Any]] = []
+        rowcount = 0
+        answer_text = ""
+
+        conversation = None
+        user_message = None
+        assistant_message = None
+
+        try:
+            # 1) Obter ou criar conversa
+            if request.conversation_id:
+                conversation = self._conversation_repo.get_by_id(
+                    session, request.conversation_id
+                )
+                if conversation is None:
+                    conversation = self._conversation_repo.create(
+                        session, title=question[:120]
+                    )
+            else:
+                conversation = self._conversation_repo.create(
+                    session, title=question[:120]
+                )
+
+            # 2) Registrar mensagem do usuário
+            user_message = self._message_repo.add_message(
+                session=session,
+                conversation_id=conversation.id,
+                role=MessageRoleEnum.USER,
+                content=question,
+            )
+            session.flush()
+
+            # 3) Planner → decide se precisa LLM SQL
+            #    (para distinct/count, planner gera SQL template e pula LLM)
+            raw_sql = None
+
+            # Só chama LLM SQL se NÃO for template.
+            # A estratégia: tenta planejar sem sql (templates), se cair em llm_sql_with_policy
+            # aí sim pede sql ao LLM e replana com raw_sql.
             """template_plan = plan_sql_template(
                 table_fqn=table_fqn,
                 columns_meta=ds.colunas_tabela,
@@ -167,6 +363,186 @@ class IracemaAskService(IIracemaAskService):
             
             
 
+            # 4) Executar SQL no banco
+            start = time.perf_counter()
+            with self._db_context.engine.connect() as connection:
+                result = connection.execute(text(sql_executed))
+                columns = result.keys()
+                rows = [dict(zip(columns, row)) for row in result.fetchall()]
+
+            rowcount = len(rows)
+            duration_ms = (time.perf_counter() - start) * 1000.0
+
+            # 5) Log de sucesso (inclui reason do planner)
+            self._sql_log_repo.log_sql(
+                session=session,
+                conversation_id=conversation.id,
+                message_id=user_message.id,
+                provider=self._llm_provider,
+                model=self._llm_model,
+                sql_text=sql_executed,
+                rowcount=rowcount,
+                duration_ms=duration_ms,
+                status=QueryStatusEnum.SUCCESS,
+                error_message=f"planner:{sql_plan.reason}",
+            )
+
+            # 6) Explicar resultado (envia resumo, não tudo)
+            rows_summary = _build_rows_summary(rows, request.top_k)
+            
+
+            answer_text = self._llm_client.explain_result(
+                schema_description=schema_description,
+                question=question,
+                sql_executed=sql_executed,
+                rows=rows_summary["preview"],
+                rowcount=rowcount,
+            )
+
+            # 7) Registrar mensagem do assistente
+            assistant_message = self._message_repo.add_message(
+                session=session,
+                conversation_id=conversation.id,
+                role=MessageRoleEnum.ASSISTANT,
+                content=answer_text,
+            )
+            session.flush()
+
+        except Exception as ex:
+            error_message = str(ex)
+            answer_text = (
+                "Ocorreu um erro ao processar sua pergunta. "
+                "A equipe técnica será notificada."
+            )
+
+            if conversation is None:
+                conversation = self._conversation_repo.create(
+                    session, title=question[:120]
+                )
+                session.flush()
+
+            if user_message is None:
+                user_message = self._message_repo.add_message(
+                    session=session,
+                    conversation_id=conversation.id,
+                    role=MessageRoleEnum.USER,
+                    content=question,
+                )
+                session.flush()
+
+            assistant_message = self._message_repo.add_message(
+                session=session,
+                conversation_id=conversation.id,
+                role=MessageRoleEnum.ASSISTANT,
+                content=answer_text,
+            )
+            session.flush()
+
+            self._sql_log_repo.log_sql(
+                session=session,
+                conversation_id=conversation.id,
+                message_id=user_message.id,
+                provider=self._llm_provider,
+                model=self._llm_model,
+                sql_text=sql_executed or "",
+                rowcount=rowcount,
+                duration_ms=0.0,
+                status=QueryStatusEnum.ERROR,
+                error_message=error_message,
+            )
+
+        # Preview limitado (para retornar ao client)
+        result_preview: List[Dict[str, Any]] = rows[: min(len(rows), request.top_k)]
+
+        response = build_ask_response_dto(
+            conversation=conversation,
+            user_message=user_message,
+            assistant_message=assistant_message,
+            question=question,
+            answer_text=answer_text,
+            sql_executed=sql_executed,
+            rowcount=rowcount,
+            result_preview=result_preview,
+            error=error_message,
+        )
+
+        session.close()
+        return response
+
+    def ask_heuristic(self, request: IracemaAskRequestDto) -> IracemaAskResponseDto:
+        session = self._db_context.create_session()
+
+        question = request.question
+        
+        ds = self._datasource_repo.get_by_table_identifier(
+            session=session,
+            table_identifier=request.table_identifier,
+        )
+
+        if ds is None or not ds.is_ativo:
+            raise ValueError(
+                "table_identifier inválido ou datasource inativa. Execute /start para obter um identificador válido."
+            )
+
+        schema_description = ds.prompt_inicial or ""
+        if not schema_description.strip():
+            raise ValueError("Datasource não possui prompt_inicial configurado.")
+
+        table_fqn = build_table_fqn(request.table_identifier)
+        
+        error_message: Optional[str] = None
+
+        sql_executed = ""
+        rows: List[Dict[str, Any]] = []
+        rowcount = 0
+        answer_text = ""
+
+        conversation = None
+        user_message = None
+        assistant_message = None
+
+        try:
+            # 1) Obter ou criar conversa
+            if request.conversation_id:
+                conversation = self._conversation_repo.get_by_id(
+                    session, request.conversation_id
+                )
+                if conversation is None:
+                    conversation = self._conversation_repo.create(
+                        session, title=question[:120]
+                    )
+            else:
+                conversation = self._conversation_repo.create(
+                    session, title=question[:120]
+                )
+
+            # 2) Registrar mensagem do usuário
+            user_message = self._message_repo.add_message(
+                session=session,
+                conversation_id=conversation.id,
+                role=MessageRoleEnum.USER,
+                content=question,
+            )
+            session.flush()
+
+            # 3) Planner → decide se precisa LLM SQL
+            #    (para distinct/count, planner gera SQL template e pula LLM)
+
+            # Só chama LLM SQL se NÃO for template.
+            # A estratégia: tenta planejar sem sql (templates), se cair em llm_sql_with_policy
+            # aí sim pede sql ao LLM e replana com raw_sql.
+            template_plan = plan_sql_template(
+                table_fqn=table_fqn,
+                columns_meta=ds.colunas_tabela,
+                question=question,
+                top_k=request.top_k,
+            )
+
+            if template_plan is not None:
+                sql_plan = template_plan
+            
+            sql_executed = sql_plan.sql
+            
             # 4) Executar SQL no banco
             start = time.perf_counter()
             with self._db_context.engine.connect() as connection:
