@@ -32,6 +32,7 @@ class IracemaAskRequestDto(BaseModel):
         "pt-BR",
         description="Idioma desejado para a resposta textual."
     )
+    explain: bool = True
 
 
 class IracemaAskResponseDto(BaseModel):

@@ -256,7 +256,6 @@ def plan_sql_template(
     Retorna um SqlPlan template quando possível.
     Retorna None quando deve delegar ao LLM.
     """
-    print(columns_meta)
 
     if is_schema_question(question):
         sql = build_columns_query(table_fqn)

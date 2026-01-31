@@ -18,6 +18,8 @@ from Application.services.iracema_ask_service import IracemaAskService
 from Application.services.iracema_llm_client_service import IracemaLLMClient
 
 from External.vector.chromadb_vector_store import ChromaDBVectorStore
+from Application.services.iracema_rag_index_service import IracemaRagIndexService
+from Application.services.iracema_rag_retrieve_service import IracemaRagRetrieveService
 
 from Application.interfaces.i_iracema_start_service import IIracemaStartService
 from Application.services.iracema_start_service import IracemaStartService
@@ -90,15 +92,20 @@ _sql_log_repo = IracemaSQLLogRepository(_db_context)
 _datasource_repo = IracemaDataSourceRepository(_db_context)
 _context_repo = IracemaConversationContextRepository(_db_context)
 
+# passar a usar esse database
 # Vector store (Chroma persistente)
 # DICA DEV: use algo como ~/.iracema/chroma para evitar permissão em /var/lib
-#_vector_store = ChromaDBVectorStore(
-#    persist_directory=getattr(settings, "VECTORSTORE_DIR", "/var/lib/iracema/chroma")
-#)
+_vector_store = ChromaDBVectorStore(
+    persist_directory=getattr(settings, "VECTORSTORE_DIR", "/var/lib/iracema/chroma"),
+    collection_name="iracema_memory",
+)
+
+_rag_index_service = IracemaRagIndexService(_vector_store)
+_rag_retrieve_service = IracemaRagRetrieveService(_vector_store)
 
 # Cliente LLM (orquestra provider + prompts)
 _llm_client = IracemaLLMClient(
-    #vector_store=_vector_store,
+    rag_retriever=_rag_retrieve_service,
     settings=settings,
 )
 
@@ -109,6 +116,8 @@ _ask_service: IIracemaAskService = IracemaAskService(
     message_repo=_message_repo,
     sql_log_repo=_sql_log_repo,
     datasource_repo=_datasource_repo,
+    rag_index_service=_rag_index_service,
+    rag_retrieve_service=_rag_retrieve_service,
     llm_client=_llm_client,
     llm_provider=LLMProviderEnum.OLLAMA,  # para log/auditoria
     llm_model=LLMModelEnum.OTHER,         # para log/auditoria
