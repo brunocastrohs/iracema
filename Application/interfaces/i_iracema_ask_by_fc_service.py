@@ -1,0 +1,15 @@
+from abc import ABC, abstractmethod
+
+from Application.dto.iracema_ask_dto import IracemaAskRequestDto, IracemaAskResponseDto
+
+
+class IIracemaAskByFCService(ABC):
+    """
+    Serviço do endpoint /ask/fc.
+    Este serviço usa Function Calling para gerar QueryPlan (JSON),
+    compila SQL determinístico e executa no PostgreSQL.
+    """
+
+    @abstractmethod
+    def ask_fc(self, request: IracemaAskRequestDto) -> IracemaAskResponseDto:
+        raise NotImplementedError()

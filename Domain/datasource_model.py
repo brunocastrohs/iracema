@@ -48,6 +48,12 @@ class DataSource(Base):
         nullable=True,
         doc="Prompt base (system prompt) usado após a resolução do START para essa datasource."
     )
+    
+    prompt_inicial_fc = Column(
+        Text,
+        nullable=True,
+        doc="Prompt Function Calling base (system prompt) usado após a resolução do START para essa datasource."
+    )
 
 
     __table_args__ = (

@@ -2,14 +2,15 @@
 # -*- coding: utf-8 -*-
 
 """
-step3_local — Popular datasources.colunas_tabela e datasources.prompt_inicial
+step3_local — Popular datasources.colunas_tabela e prompts iniciais
 com base nas tabelas já existentes no schema zcm.
 
 - NÃO chama GeoServer
 - NÃO cria tabelas zcm.*
 - Apenas lê o schema local e atualiza:
   - public.datasources.colunas_tabela (jsonb)
-  - public.datasources.prompt_inicial (text)
+  - public.datasources.prompt_inicial (text)        -> SQLCoder style (gera SQL)
+  - public.datasources.prompt_inicial_fc (text)     -> Function Calling style (gera JSON args)
 
 Regras:
 - identificador_tabela no BD é lower case
@@ -19,7 +20,7 @@ Regras:
 
 import json
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import psycopg2
 
@@ -37,13 +38,28 @@ TARGET_SCHEMA = "zcm"
 SRID_DEFAULT = 4674  # se geometry_columns não retornar SRID, usa esse
 
 
-def ensure_prompt_column(conn) -> None:
+# -----------------------------------------------------------------------------
+# Schema / migrations (colunas prompt)
+# -----------------------------------------------------------------------------
+
+def ensure_prompt_columns(conn) -> None:
+    """
+    Garante que datasources tem as colunas prompt_inicial e prompt_inicial_fc.
+    """
     with conn.cursor() as cur:
         cur.execute("""
           ALTER TABLE public.datasources
           ADD COLUMN IF NOT EXISTS prompt_inicial TEXT;
         """)
+        cur.execute("""
+          ALTER TABLE public.datasources
+          ADD COLUMN IF NOT EXISTS prompt_inicial_fc TEXT;
+        """)
 
+
+# -----------------------------------------------------------------------------
+# Datasources + introspecção
+# -----------------------------------------------------------------------------
 
 def fetch_datasource_identifiers(conn) -> List[str]:
     with conn.cursor() as cur:
@@ -70,7 +86,7 @@ def table_exists(conn, schema: str, table: str) -> bool:
 
 def get_geometry_info(conn, schema: str, table: str) -> Dict[str, Dict[str, Any]]:
     """
-    Retorna dict: { geom_column_name: {type, srid} }
+    Retorna dict: { geom_column_name: {geom_type, srid} }
     Usa public.geometry_columns (PostGIS).
     """
     with conn.cursor() as cur:
@@ -93,6 +109,11 @@ def get_geometry_info(conn, schema: str, table: str) -> Dict[str, Dict[str, Any]
 def get_table_columns(conn, schema: str, table: str) -> List[Dict[str, Any]]:
     """
     Lista colunas via information_schema, e enriquece com info de geometria quando existir.
+
+    Observação:
+    - Mantive a regra original do seu script: AND column_name not ilike 'geom'
+      (ou seja, não traz a coluna geom literal). Se você quiser incluir colunas
+      geom com outros nomes, o detector ainda funciona.
     """
     geom_info = get_geometry_info(conn, schema, table)
 
@@ -105,7 +126,9 @@ def get_table_columns(conn, schema: str, table: str) -> List[Dict[str, Any]]:
             is_nullable,
             ordinal_position
           FROM information_schema.columns
-          WHERE table_schema = %s AND table_name = %s AND column_name not ilike 'geom'
+          WHERE table_schema = %s
+            AND table_name = %s
+            AND column_name not ilike 'geom'
           ORDER BY ordinal_position;
         """, (schema, table))
         rows = cur.fetchall()
@@ -143,79 +166,179 @@ def get_table_columns(conn, schema: str, table: str) -> List[Dict[str, Any]]:
     return cols
 
 
-from typing import List, Dict, Any, Optional
+# -----------------------------------------------------------------------------
+# Prompt builders
+# -----------------------------------------------------------------------------
 
 def build_prompt_inicial(
     table_name: str,
     cols: List[Dict[str, Any]],
-    top_k: int = 50,
-    question_placeholder: str = "{PERGUNTA_DO_USUARIO}"
+    question_placeholder: str = "{PERGUNTA_DO_USUARIO}",
 ) -> str:
     """
-    Gera o prompt inicial no MESMO template do sqlcoder (PT-BR),
-    preenchendo dinamicamente a seção ### Esquema com um CREATE TABLE
-    baseado nas colunas reais.
+    Gera o prompt inicial no template do SQLCoder (PT-BR),
+    preenchendo dinamicamente a seção ### Esquema com um CREATE TABLE.
 
-    Espera que cada item de `cols` tenha, no mínimo:
-      - name: str
-      - type: str
-      - nullable: bool
-      - is_geometry: bool (opcional)
+    - Termina com "### SQL"
+    - A pergunta entra em {PERGUNTA_DO_USUARIO}
     """
     def norm_bool(v: Any) -> bool:
         return bool(v) if v is not None else False
 
-    # Monta as linhas do CREATE TABLE
     col_defs: List[str] = []
     for c in cols or []:
         col_name = str(c.get("name", "")).strip()
         col_type = str(c.get("type", "TEXT")).strip() or "TEXT"
-        nullable = norm_bool(c.get("nullable", True))  # padrão: aceita NULL se não informado
+        nullable = norm_bool(c.get("nullable", True))
 
         if not col_name:
             continue
 
         null_sql = "" if nullable else " NOT NULL"
-        col_defs.append(f'  {col_name} {col_type}{null_sql}')
+        col_defs.append(f"  {col_name} {col_type}{null_sql}")
 
     if col_defs:
         create_table = "CREATE TABLE " + table_name + " (\n" + ",\n".join(col_defs) + "\n);"
     else:
-        # fallback para não quebrar o template caso não detecte colunas
         create_table = f"CREATE TABLE {table_name} (\n  -- (sem colunas detectadas)\n);"
 
-    return (
-        f"""### Tarefa
-        Escreva UMA consulta SELECT em PostgreSQL que responda à pergunta.
-        Retorne APENAS a consulta SQL.
+    return f"""### Tarefa
+Escreva UMA consulta SELECT em PostgreSQL que responda à pergunta.
+Retorne APENAS a consulta SQL.
 
-        ### Esquema
-        {create_table}
+### Esquema
+{create_table}
 
-        ### Pergunta
-        {question_placeholder}
+### Pergunta
+{question_placeholder}
 
-        ### SQL
-        """
-            )
-        
-def update_datasource(conn, ident: str, cols: List[Dict[str, Any]], prompt_inicial: str) -> None:
+### SQL
+"""
+
+
+def build_prompt_inicial_fc(
+    table_name: str,
+    cols: List[Dict[str, Any]],
+    question_placeholder: str = "{PERGUNTA_DO_USUARIO}",
+) -> str:
+    """
+    Prompt base para Function Calling (geração de argumentos estruturados / QueryPlan JSON).
+    - NÃO pede SQL.
+    - Pede JSON válido compatível com um schema de QueryPlanArgs.
+
+    Observação: este prompt é “provider-agnostic”. Se você usar Structured Outputs
+    no Ollama, este texto serve como contexto e as constraints vêm do schema.
+    """
+    # Lista de colunas não-geom (recomendadas)
+    non_geom_cols: List[str] = []
+    geom_cols: List[str] = []
+
+    for c in cols or []:
+        name = str(c.get("name") or "").strip()
+        if not name:
+            continue
+        if c.get("is_geometry"):
+            geom_cols.append(name)
+        else:
+            non_geom_cols.append(name)
+
+    non_geom_str = ", ".join(non_geom_cols) if non_geom_cols else "(nenhuma detectada)"
+    geom_str = ", ".join(geom_cols) if geom_cols else "(nenhuma)"
+
+    # Ajuda de tipos (para FC escolher coluna de soma)
+    numeric_cols = []
+    text_cols = []
+    for c in cols or []:
+        name = str(c.get("name") or "").strip()
+        ctype = str(c.get("type") or "").lower()
+        if not name or c.get("is_geometry"):
+            continue
+
+        if any(t in ctype for t in ["numeric", "double", "real", "float", "int", "bigint", "smallint", "decimal"]):
+            numeric_cols.append(name)
+        else:
+            text_cols.append(name)
+
+    numeric_str = ", ".join(numeric_cols) if numeric_cols else "(nenhuma)"
+    text_str = ", ".join(text_cols) if text_cols else "(nenhuma)"
+
+    return f"""Você é um assistente que converte perguntas em linguagem natural em um PLANO ESTRUTURADO (JSON) para consultas em PostgreSQL.
+
+REGRAS OBRIGATÓRIAS:
+- NÃO gere SQL.
+- NÃO gere explicações em texto.
+- RETORNE APENAS um JSON (argumentos) compatível com o schema de QueryPlanArgs.
+- Use SOMENTE colunas existentes na tabela.
+- NUNCA use colunas geométricas para cálculos, filtros, agrupamentos ou seleção.
+
+TABELA ALVO:
+{table_name}
+
+COLUNAS DISPONÍVEIS (não-geom):
+{non_geom_str}
+
+COLUNAS NUMÉRICAS (candidatas a SUM):
+{numeric_str}
+
+COLUNAS TEXTUAIS (candidatas a GROUP BY / DISTINCT):
+{text_str}
+
+COLUNAS GEOMÉTRICAS (PROIBIDAS):
+{geom_str}
+
+INTENÇÕES SUPORTADAS (campo 'intent'):
+- schema        -> listar colunas / estrutura
+- count         -> contar registros
+- distinct      -> listar valores distintos de uma coluna
+- sum           -> somar valores de uma coluna numérica
+- grouped_sum   -> somar valores agrupados por uma coluna
+- detail        -> retornar linhas detalhadas (limitadas)
+
+DICAS:
+- Se a pergunta tiver "quantos", use intent="count"
+- Se tiver "valores", "quais são", "distintos", use intent="distinct"
+- Se tiver "total", "somar", "soma", use intent="sum" ou "grouped_sum" se mencionar "por/cada"
+- Se mencionar uma coluna explicitamente, use essa coluna
+- Se não mencionar, escolha a melhor coluna conforme o tipo (numérica para soma; textual para agrupar)
+
+PERGUNTA:
+{question_placeholder}
+"""
+
+
+# -----------------------------------------------------------------------------
+# Update datasource
+# -----------------------------------------------------------------------------
+
+def update_datasource(
+    conn,
+    ident: str,
+    cols: List[Dict[str, Any]],
+    prompt_inicial: str,
+    prompt_inicial_fc: str,
+) -> None:
     with conn.cursor() as cur:
         cur.execute("""
           UPDATE public.datasources
           SET
             colunas_tabela = %s::jsonb,
             prompt_inicial = %s,
+            prompt_inicial_fc = %s,
             updated_at = NOW()
           WHERE identificador_tabela = %s;
-        """, (json.dumps(cols, ensure_ascii=False), prompt_inicial, ident))
+        """, (json.dumps(cols, ensure_ascii=False), prompt_inicial, prompt_inicial_fc, ident))
 
+
+# -----------------------------------------------------------------------------
+# Main
+# -----------------------------------------------------------------------------
 
 def main() -> int:
     conn = psycopg2.connect(**DB)
     try:
         conn.autocommit = False
-        ensure_prompt_column(conn)
+
+        ensure_prompt_columns(conn)
         conn.commit()
 
         ids = fetch_datasource_identifiers(conn)
@@ -236,17 +359,16 @@ def main() -> int:
 
             cols = get_table_columns(conn, TARGET_SCHEMA, ident)
 
-            # IMPORTANT: aqui definimos o nome completo da tabela para o prompt
-            # Se você quiser forçar public."...", basta trocar TARGET_SCHEMA por "public".
             table_name = f'{TARGET_SCHEMA}."{ident}"'
 
             prompt_inicial = build_prompt_inicial(table_name, cols)
+            prompt_inicial_fc = build_prompt_inicial_fc(table_name, cols)
 
-            update_datasource(conn, ident, cols, prompt_inicial)
+            update_datasource(conn, ident, cols, prompt_inicial, prompt_inicial_fc)
             conn.commit()
             updated += 1
 
-        print(f"[step3_local] Atualizados (colunas_tabela + prompt_inicial): {updated}")
+        print(f"[step3_local] Atualizados (colunas_tabela + prompt_inicial + prompt_inicial_fc): {updated}")
         print(f"[step3_local] Tabelas ausentes em {TARGET_SCHEMA}: {missing_tables}")
 
         return 0

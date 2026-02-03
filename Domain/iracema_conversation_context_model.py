@@ -73,6 +73,12 @@ class IracemaConversationContext(Base):
         nullable=True,
         doc="Snapshot do prompt inicial escolhido (para auditoria e estabilidade).",
     )
+    
+    prompt_inicial_fc_snapshot = Column(
+        Text,
+        nullable=True,
+        doc="Snapshot do prompt inicial escolhido (para auditoria e estabilidade).",
+    )
 
     # --- Memória curta ---
     short_memory_summary = Column(

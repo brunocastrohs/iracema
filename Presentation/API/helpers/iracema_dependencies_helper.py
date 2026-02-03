@@ -32,7 +32,9 @@ from Data.repositories.iracema_conversation_context_repository import (
 from Application.interfaces.i_iracema_start_catalog_service import IIracemaStartCatalogService
 from Application.services.iracema_start_catalog_service import IracemaStartCatalogService
 
-
+from External.ai.iracema_fc_client_ollama import IracemaFCOllamaClient
+from Application.interfaces.i_iracema_ask_by_fc_service import IIracemaAskByFCService
+from Application.services.iracema_ask_by_fc_service import IracemaAskByFCService
 # -----------------------------------------------------------------------------
 # Auth (JWT Bearer)
 # -----------------------------------------------------------------------------
@@ -137,11 +139,35 @@ _catalog_service: IIracemaStartCatalogService = IracemaStartCatalogService(
     version="1.0",
 )
 
+_fc_client = IracemaFCOllamaClient(settings=settings)
+
+_ask_fc_service: IIracemaAskByFCService = IracemaAskByFCService(
+    db_context=_db_context,
+    conversation_repo=_conversation_repo,
+    message_repo=_message_repo,
+    sql_log_repo=_sql_log_repo,
+    datasource_repo=_datasource_repo,
+    rag_index_service=_rag_index_service,
+    rag_retrieve_service=_rag_retrieve_service,
+    fc_client=_fc_client,
+    llm_client=_llm_client,  # explainer
+    llm_provider=LLMProviderEnum.OLLAMA,
+    llm_model=LLMModelEnum.OTHER,
+)
+
+
+def get_iracema_start_catalog_service() -> IIracemaStartCatalogService:
+    return _catalog_service
+
+def get_iracema_ask_fc_service():
+    return _ask_fc_service
+
 def get_iracema_ask_service() -> IIracemaAskService:
     return _ask_service
 
 def get_iracema_start_service() -> IIracemaStartService:
     return _start_service
 
-def get_iracema_start_catalog_service() -> IIracemaStartCatalogService:
-    return _catalog_service
+def get_iracema_ask_fc_service() -> IIracemaAskByFCService:
+    return _ask_fc_service
+

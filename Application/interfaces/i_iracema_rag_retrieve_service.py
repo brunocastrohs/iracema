@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 from typing import List, Optional
+from Application.dto.iracema_sql_example_dto import IracemaSqlExampleDto
 
 class IIracemaRagRetrieveService(ABC):
     @abstractmethod
@@ -10,7 +11,7 @@ class IIracemaRagRetrieveService(ABC):
         table_identifier: str,
         question: str,
         k: int = 4,
-    ) -> List[str]:
+    ) -> List[IracemaSqlExampleDto]:
         raise NotImplementedError()
     
     @abstractmethod

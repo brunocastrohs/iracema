@@ -7,10 +7,13 @@ from Application.dto.iracema_ask_dto import (
     IracemaAskResponseDto,
 )
 from Application.interfaces.i_iracema_ask_service import IIracemaAskService
+from Application.interfaces.i_iracema_ask_by_fc_service import IIracemaAskByFCService
+
 
 from Presentation.API.helpers.iracema_dependencies_helper import (
     get_current_user,
     get_iracema_ask_service,
+    get_iracema_ask_fc_service
 )
 
 router = APIRouter()
@@ -84,3 +87,10 @@ async def ask_iracema_ai(
     except Exception as ex:
         # fallback defensivo (idealmente logar aqui)
         raise HTTPException(status_code=500, detail=str(ex))
+    
+@router.post("/ask/fc")
+def ask_fc(
+    request: IracemaAskRequestDto,
+    svc: IIracemaAskByFCService = Depends(get_iracema_ask_fc_service),
+):
+    return svc.ask_fc(request)

@@ -40,6 +40,7 @@ class _Settings(BaseModel):
     LLM_MODEL_SQL: str = Field(default="phi3")
     LLM_MODEL_EXPLAINER: str = Field(default="phi3")
     LLM_TEMPERATURE: float = Field(default=0.0)
+    LLM_MODEL_FC: str = Field(default="phi3")
     
     VECTORSTORE_DIR: str = Field(default="/var/lib/iracema/chroma")
 
@@ -107,6 +108,7 @@ settings = _Settings(
     LLM_BASE_URL=_get("LLM.BaseUrl", "http://localhost:11434"),
     LLM_MODEL_SQL=_get("LLM.ModelSql", "phi3"),
     LLM_MODEL_EXPLAINER=_get("LLM.ModelExplainer", "phi3"),
+    LLM_MODEL_FC = _get("LLM.ModelFC", "phi3"),
     LLM_TEMPERATURE=float(_get("LLM.Temperature", 0.0)),
     
     VECTORSTORE_DIR=_get("VectorStore.Dir", "/var/lib/iracema/chroma"),
