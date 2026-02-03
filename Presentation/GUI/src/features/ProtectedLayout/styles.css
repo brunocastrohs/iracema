@@ -1,11 +1,36 @@
+/* ==========================
+   Protected Layout (Navigator + Content)
+   ========================== */
+
 .protected-layout {
-  display: flex;
-  max-height: 100vh;
-  background: #f6f7f9;
+  height: 100vh;
+  width: 100%;
+  display: grid;                /* ✅ precisa ser grid */
+  grid-template-columns: 250px 1fr;
+  background: #ffffff;
 }
 
+/* Quando colapsado: sidebar some de verdade */
+.protected-layout.nav-collapsed {
+  grid-template-columns: 0 1fr; /* ✅ conteúdo ganha a tela toda */
+}
+
+/* Conteúdo principal */
 .protected-content {
-  flex: 1;
-  padding: 1.5rem;
-  overflow-y: auto;
+  min-width: 0;                 /* ✅ evita overflow quebrando grid */
+  height: 100vh;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+/* (Opcional, recomendado) em telas pequenas a sidebar vira overlay */
+@media (max-width: 768px) {
+  .protected-layout {
+    grid-template-columns: 1fr; /* conteúdo full */
+  }
+
+  /* Mantém conteúdo full mesmo se nav-collapsed */
+  .protected-layout.nav-collapsed {
+    grid-template-columns: 1fr;
+  }
 }

@@ -1,65 +1,102 @@
+/* =========================================
+   IRACEMA - Navigator / Sidebar
+   ========================================= */
+
+/* ==========================
+   Wrapper da sidebar (desktop)
+   ========================== */
 .sidebar-wrapper {
   position: relative;
+  width: 250px;
+  height: 100vh;
+  flex: 0 0 250px; /* garante que ocupa a coluna inteira no flex */
+  transition: width 0.25s ease-in-out, flex-basis 0.25s ease-in-out;
+  overflow: visible;
 }
 
+/* Quando colapsado: sai do layout */
+.sidebar-wrapper.collapsed {
+  width: 0;
+  flex-basis: 0;
+}
+
+/* Evita que a sidebar “pegue clique” quando colapsada */
+.sidebar-wrapper.collapsed .sidebar {
+  pointer-events: none;
+}
+
+/* ==========================
+   Botão toggle
+   ========================== */
 .toggle-button {
   position: absolute;
-  top: 6px;
-  left: 6px;
-  z-index: 1001;
-  background: none;
-  color: black;
-  border: none;
+  top: 10px;
+  left: 10px;
+  z-index: 1100;
+
+  background: #ffffff;
+  color: #333;
+  border: 1px solid rgba(0, 0, 0, 0.14);
   cursor: pointer;
-  font-size: 1.2rem;
-  border-radius: 4px;
-  transition: background-color 0.3s;
+
+  font-size: 1.1rem;
+  border-radius: 8px;
+  padding: 6px 10px;
+
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 
 .toggle-button:hover {
   background-color: var(--primary-color);
-  color: white;
+  border-color: var(--primary-color);
+  color: #fff;
 }
 
+/* Quando a sidebar está colapsada, o botão precisa ficar “na borda esquerda” */
+.sidebar-wrapper.collapsed .toggle-button {
+  left: 10px;
+}
+
+/* ==========================
+   Sidebar
+   ========================== */
 .sidebar {
   width: 250px;
   height: 100vh;
+
   background-color: #f8f9fa;
-  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+
   display: flex;
   flex-direction: column;
-  transition: transform 0.3s ease-in-out;
+
+  /* animação de recolher */
+  transform: translateX(0);
+  transition: transform 0.25s ease-in-out;
+
+  overflow: hidden;
 }
 
+/* Esconde visualmente quando colapsada */
 .sidebar-wrapper.collapsed .sidebar {
   transform: translateX(-100%);
 }
 
-/* mobile */
-@media (max-width: 768px) {
-  .sidebar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    z-index: 1000;
-  }
-
-  .toggle-button {
-    top: 8px;
-    left: 8px;
-  }
-}
-
+/* ==========================
+   Logo
+   ========================== */
 .logo-container {
   width: 80%;
   height: 80px;
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
-  margin-top: 35px;
-  margin-left: 25px;
+  margin: 42px auto 18px;
 }
 
+/* ==========================
+   Navegação
+   ========================== */
 nav ul {
   list-style: none;
   padding: 0;
@@ -67,39 +104,85 @@ nav ul {
 }
 
 nav ul li {
-  padding: 8px 20px;
+  padding: 6px 14px;
 }
 
 nav ul li a {
   text-decoration: none;
-  color: #333;
+  color: #222;
+
   display: flex;
   align-items: center;
-  font-weight: 600;
-  transition: background 0.3s;
-  padding: 10px;
-  border-radius: 4px;
+  gap: 10px;
+
+  font-weight: 700;
+  padding: 10px 12px;
+  border-radius: 10px;
+
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+/* ícone primereact */
+nav ul li a i {
+  font-size: 1rem;
+  opacity: 0.95;
 }
 
 nav ul li a:hover,
 nav ul li a.active {
   background-color: var(--primary-color);
-  color: white;
+  color: #fff;
 }
 
+/* ==========================
+   Logout
+   ========================== */
 .nav__logout {
   width: 100%;
   padding: 10px;
   border: 1px solid var(--error-color);
   color: var(--error-color);
   background: #fff;
-  border-radius: 8px;
-  font-weight: 700;
+  border-radius: 10px;
+  font-weight: 800;
   cursor: pointer;
-  transition: all 0.3s ease-in-out;
+  transition: all 0.18s ease-in-out;
 }
 
 .nav__logout:hover {
   background: var(--error-color);
+  border-color: var(--error-color);
   color: #fff;
+}
+
+/* ==========================
+   Mobile (overlay)
+   ========================== */
+@media (max-width: 768px) {
+  /* wrapper vira overlay */
+  .sidebar-wrapper {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+
+    /* aqui a width não “empurra” layout, é overlay */
+    width: 250px;
+    flex: none;
+
+    z-index: 1200;
+  }
+
+  /* quando colapsado no mobile: some do overlay */
+  .sidebar-wrapper.collapsed {
+    width: 0;
+  }
+
+  /* botão toggle sempre visível e acessível */
+  .toggle-button {
+    position: fixed; /* fixa no viewport */
+    top: 10px;
+    left: 10px;
+    z-index: 1300;
+  }
 }

@@ -16,6 +16,7 @@
     "@mui/material": "^7.3.4",
     "axios": "^1.12.2",
     "minisearch": "^7.2.0",
+    "primeicons": "^7.0.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-dropzone": "^14.3.8",

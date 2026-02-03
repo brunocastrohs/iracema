@@ -1,0 +1,167 @@
+.config-page {
+  height: 100%;
+  width: 100%;
+  background: #ffffff;
+  display: flex;
+  justify-content: center;
+  padding: 18px;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
+    Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  color: #0f172a;
+}
+
+.config-card {
+  width: min(1200px, 100%);
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.config-header {
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  margin-bottom: 14px;
+}
+
+.config-title {
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.config-subtitle {
+  font-size: 13px;
+  color: rgba(15, 23, 42, 0.70);
+  margin-top: 6px;
+}
+
+.config-section {
+  margin-top: 32px;
+  
+}
+
+.config-label {
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.config-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.config-help {
+  font-size: 13px;
+  color: rgba(15, 23, 42, 0.70);
+  line-height: 1.5;
+  margin: 10px 0;
+}
+
+.config-select {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+  color: #0f172a;
+  padding: 12px 14px;
+  outline: none;
+  font-size: 14px;
+}
+
+.config-select:focus {
+  border-color: rgba(59, 130, 246, 0.45);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.config-actions {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.config-btn {
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #111827;
+  color: #ffffff;
+  padding: 12px 14px;
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-btn:hover {
+  background: #0b1220;
+}
+
+.config-saved {
+  font-size: 13px;
+  font-weight: 800;
+  color: #16a34a;
+}
+
+/* Switch GPT-like */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 46px;
+  height: 26px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #e5e7eb;
+  transition: 0.2s;
+  border-radius: 999px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  top: 3px;
+  background-color: white;
+  transition: 0.2s;
+  border-radius: 999px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+}
+
+.switch input:checked + .slider {
+  background-color: #111827;
+}
+
+.switch input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+.config-strategy-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.config-strategy-list li {
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.config-strategy-list span {
+  color: #555;
+  font-size: 0.9rem;
+}

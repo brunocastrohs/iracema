@@ -1,8 +1,7 @@
 import { Outlet, Navigate } from "react-router-dom";
+import { useState } from "react";
 import Navigator from "../Navigator";
-
 import "./styles.css";
-
 
 function hasValidToken() {
   const token =
@@ -12,13 +11,14 @@ function hasValidToken() {
 }
 
 export default function ProtectedLayout() {
-  if (!hasValidToken()) {
-    return <Navigate to="/" replace />;
-  }
+  const [navCollapsed, setNavCollapsed] = useState(false);
+
+  if (!hasValidToken()) return <Navigate to="/" replace />;
 
   return (
-    <div className="protected-layout">
-      <Navigator />
+    <div className={`protected-layout ${navCollapsed ? "nav-collapsed" : ""}`}>
+      <Navigator collapsed={navCollapsed} onToggleCollapsed={setNavCollapsed} />
+
       <main className="protected-content">
         <Outlet />
       </main>

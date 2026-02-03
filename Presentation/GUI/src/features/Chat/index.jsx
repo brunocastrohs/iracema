@@ -1,5 +1,5 @@
 // src/features/Chat/index.js
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getCatalog, askChat } from "./service";
 import {
   buildDocs,
@@ -9,6 +9,8 @@ import {
   buildRefinementChips,
 } from "./catalogEngine";
 import "./styles.css";
+import avatarIracema from "../../_assets/images/avatar_iracema.png";
+
 
 import {
   now,
@@ -27,13 +29,26 @@ export default function Chat() {
   const [mode, setMode] = useState("catalog"); // "catalog" | "ask"
   const [selectedTableId, setSelectedTableId] = useState(null);
 
+  const didLoadCatalogRef = useRef(false);
+
+  const [sending, setSending] = useState(false);
+
+  const [typedDone, setTypedDone] = useState({});
+
+  function markDone(id) {
+    if (!id) return;
+    setTypedDone((m) => (m[id] ? m : { ...m, [id]: true }));
+  }
+
   const [messages, setMessages] = useState([
     {
+      id: `m_${Date.now()}_${Math.random().toString(16).slice(2)}`,
       role: "assistant",
       ts: now(),
       text:
-        "Me diga o que você quer encontrar no catálogo (tema, recorte, ano, fonte). " +
-        "Eu vou sugerir as tabelas mais próximas e explicar o porquê.\n\n" +
+        "Olá! Fico feliz em lhe fornecer informações sobre a nossa base de dados. \n\n" +
+        "Me diga o que você quer encontrar no catálogo (tema, palavra chave, ano, fonte). " +
+        "Eu vou sugerir as fontes de dados mais próximas e explicar o porquê.\n\n" +
         "Dica: você também pode digitar o título ou o nome de uma camada da PEDEA para selecionar direto.",
       followUps: [
         "Ex.: uso do solo 2021",
@@ -43,8 +58,24 @@ export default function Chat() {
     },
   ]);
 
+  const lastAssistantId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i]?.role === "assistant" && !messages[i]?.isLoading) return messages[i].id;
+    }
+    return null;
+  }, [messages]);
+
   const [input, setInput] = useState("");
   const bottomRef = useRef(null);
+
+  const inputRef = useRef(null);
+
+  function focusInput() {
+    // pequeno timeout ajuda em casos onde um rerender ocorre logo após o click
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 0);
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -52,6 +83,9 @@ export default function Chat() {
 
   useEffect(() => {
     (async () => {
+      if (didLoadCatalogRef.current) return;
+      didLoadCatalogRef.current = true;
+
       setLoadingCatalog(true);
       setCatalogError("");
 
@@ -72,6 +106,7 @@ export default function Chat() {
       setMessages((m) => [
         ...m,
         {
+          id: newMsgId(),
           role: "assistant",
           ts: now(),
           text: `Catálogo carregado: ${meta?.count ?? builtDocs.length} tabelas ativas. Pode perguntar!`,
@@ -80,25 +115,35 @@ export default function Chat() {
     })();
   }, []);
 
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  function newMsgId() {
+    return `m_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  }
+
   function pushUser(text) {
-    setMessages((m) => [...m, { role: "user", ts: now(), text }]);
+    setMessages((m) => [...m, { id: newMsgId(), role: "user", ts: now(), text }]);
   }
 
   function pushAssistant(payload) {
-    setMessages((m) => [...m, { role: "assistant", ts: now(), ...payload }]);
+    setMessages((m) => [...m, { id: newMsgId(), role: "assistant", ts: now(), ...payload }]);
   }
 
   function resetChat() {
     setMode("catalog");
     setSelectedTableId(null);
     setInput("");
-
+    focusInput();
     setMessages([
       {
+        id: newMsgId(),
         role: "assistant",
         ts: now(),
         text:
-          "Chat resetado. Descreva o que você procura no catálogo (tema, recorte, ano, fonte). " +
+          "Recomeçando nossa conversa!\n\n" +
+          "Descreva o que você procura no catálogo (tema, recorte, ano, fonte). " +
           "Eu vou sugerir as tabelas mais próximas e explicar o porquê.\n\n" +
           "Dica: você pode digitar o *título* ou o *identificador_tabela* para selecionar direto.",
         followUps: ["Ex.: uso do solo 2021", "Ex.: biodiversidade anfíbios", "Ex.: unidades de conservação"],
@@ -106,57 +151,98 @@ export default function Chat() {
       ...(loadingCatalog
         ? []
         : [
-            {
-              role: "assistant",
-              ts: now(),
-              text: `Catálogo ainda está carregado (${docs.length} tabelas ativas). Pode perguntar!`,
-            },
-          ]),
+          {
+            id: newMsgId(),
+            role: "assistant",
+            ts: now(),
+            text: `Catálogo ainda está carregado (${docs.length} tabelas ativas). Pode perguntar!`,
+          },
+        ]),
     ]);
   }
 
   async function handleAskFlow(question) {
-    if (!selectedTableId) {
-      pushAssistant({
-        text: "Você ainda não selecionou uma tabela. Primeiro escolha uma tabela do catálogo.",
-      });
-      setMode("catalog");
-      return;
-    }
+    setSending(true);
+    focusInput();
 
-    pushAssistant({ text: "Consultando…" });
+    // 1) mostra 1 único bubble de loading
+    pushAssistant({ text: "Consultando…", isLoading: true });
 
-    const { ok, data, error } = await askChat({
-      question,
-      table_identifier: selectedTableId,
-      top_k: 1000,
-    });
-
-    setMessages((prev) => {
-      const copy = [...prev];
-      const last = copy[copy.length - 1];
-      if (last?.role === "assistant" && last?.text === "Consultando…") copy.pop();
-
-      if (!ok) {
-        copy.push({
-          role: "assistant",
-          ts: now(),
-          text: `Erro: ${error || "falha no /chat/ask"}`,
-        });
-      } else if (data?.error) {
-        copy.push({ role: "assistant", ts: now(), text: `Erro: ${data.error}` });
-      } else {
-        copy.push({
-          role: "assistant",
-          ts: now(),
-          text: safeText(data?.answer_text) || "Sem resposta textual.",
-          preview: Array.isArray(data?.result_preview) ? data.result_preview : [],
-          followUps: ["Nova pergunta", "Trocar tabela"],
-        });
+    try {
+      if (!selectedTableId) {
+        setMode("catalog");
+        // remove o loading e informa
+        setMessages((prev) => [
+          ...removeTrailingLoading(prev),
+          {
+            id: newMsgId(),
+            role: "assistant",
+            ts: now(),
+            text: "Você ainda não selecionou uma tabela. Primeiro escolha uma tabela do catálogo.",
+          },
+        ]);
+        return;
       }
 
-      return copy;
-    });
+      const explain = localStorage.getItem("iracema_explain") === "true";
+      const strategy = localStorage.getItem("iracema_strategy") || "ask/fc";
+
+      const { ok, data, error } = await askChat({
+        question,
+        table_identifier: selectedTableId,
+        top_k: 1000,
+        explain,
+        strategy,
+      });
+
+      setMessages((prev) => {
+        const base = removeTrailingLoading(prev);
+
+        if (!ok) {
+          return [
+            ...base,
+            { id: newMsgId(), role: "assistant", ts: now(), text: `Erro: ${error || "falha no /chat/ask"}` },
+          ];
+        }
+
+        if (data?.error) {
+          return [
+            ...base,
+            { id: newMsgId(), role: "assistant", ts: now(), text: `Erro: ${data.error}` },
+          ];
+        }
+
+        return [
+          ...base,
+          {
+            id: newMsgId(),
+            role: "assistant",
+            ts: now(),
+            text: safeText(data?.answer_text) || "Sem resposta textual.",
+            preview: Array.isArray(data?.result_preview) ? data.result_preview : [],
+            followUps: ["Nova pergunta", "Trocar tabela"],
+          },
+        ];
+      });
+    } catch (e) {
+      setMessages((prev) => [
+        ...removeTrailingLoading(prev),
+        { id: newMsgId(), role: "assistant", ts: now(), text: "Erro inesperado ao consultar. Tente novamente." },
+      ]);
+    } finally {
+      setSending(false);
+      focusInput();
+    }
+  }
+
+  function removeTrailingLoading(list) {
+    const copy = [...list];
+    while (copy.length) {
+      const last = copy[copy.length - 1];
+      if (last?.role === "assistant" && last?.isLoading) copy.pop();
+      else break;
+    }
+    return copy;
   }
 
   function onSelectTable(id) {
@@ -168,13 +254,13 @@ export default function Chat() {
 
     pushAssistant({
       text:
-        `Tabela selecionada:\n` +
-        `• ${doc.title}\n` +
+        `Encontrei a seguinte fonte de dados para você:\n\n` +
+        `• Camada ${doc.title}\n` +
         `• ${doc.path}\n` +
         (doc.year ? `• Ano: ${doc.year}\n` : "") +
         (doc.source ? `• Fonte: ${doc.source}\n` : "") +
-        `\nQuer ver as colunas e a descrição completa, ou seguir para a consulta?`,
-      followUps: ["Ver detalhes", "Continuar"],
+        `\nQuer ver as colunas e a descrição completa, ou selecionar a camada para a consulta?`,
+      followUps: ["Ver detalhes", "Selecionar"],
       context: { selectedId: doc.id },
     });
   }
@@ -189,47 +275,96 @@ export default function Chat() {
 
     pushAssistant({
       text:
-        `Ok. A partir de agora vou responder usando a tabela:\n` +
+        `Ok. A partir de agora vou responder usando a tabela:\n\n` +
         `• ${doc?.title ?? selectedId}\n` +
         `• identificador_tabela: ${selectedId}\n\n` +
         `Pode mandar sua pergunta.`,
-      followUps: ["Trocar tabela"],
+      followUps: ["Ver detalhes", "Trocar tabela"],
+
     });
   }
 
   function handleFollowUpClick(label, context) {
-    const selectedId = context?.selectedId;
+    focusInput();
+
+    const ctxId = context?.selectedId;
+    const effectiveId = ctxId || selectedTableId;
 
     if (label === "Ver detalhes") {
-      if (!selectedId) return;
-      const doc = docs.find((d) => d.id === selectedId);
+      if (!effectiveId) {
+        pushAssistant({ text: "Não há tabela selecionada para mostrar detalhes." });
+        return;
+      }
+
+      const doc = docs.find((d) => d.id === effectiveId);
       if (!doc) {
         pushAssistant({ text: "Não encontrei os detalhes dessa tabela." });
         return;
       }
+
       pushAssistant({
         text: formatDetails(doc),
-        followUps: ["Continuar", "Trocar tabela"],
-        context: { selectedId },
+        followUps: mode === "ask" ? ["Nova pergunta", "Trocar tabela"] : ["Selecionar", "Trocar tabela"],
+        context: { selectedId: effectiveId },
       });
       return;
     }
 
-    if (label === "Continuar") {
-      if (!selectedId) return;
-      continueWithSelected(selectedId);
+    if (label === "Selecionar") {
+      if (!ctxId) return;
+      continueWithSelected(ctxId);
       return;
     }
 
     onSend(label);
   }
 
+  const scrollToBottom = () => {
+    // garante que o DOM atualizou antes de scrollar
+    requestAnimationFrame(() => {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    });
+  };
+
+  function getLastAssistantMessageWithFollowUps(msgs) {
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i]?.role === "assistant" && Array.isArray(msgs[i]?.followUps) && msgs[i].followUps.length) {
+        return msgs[i];
+      }
+    }
+    return null;
+  }
+
+  function tryMatchTypedFollowUp(typedText) {
+    const t = safeText(typedText);
+    if (!t) return null;
+
+    const lastWithFollowUps = getLastAssistantMessageWithFollowUps(messages);
+    if (!lastWithFollowUps) return null;
+
+    // match case-insensitive, mas mantém o label original
+    const found = lastWithFollowUps.followUps.find((fu) => fu.toLowerCase() === t.toLowerCase());
+    if (!found) return null;
+
+    return { label: found, context: lastWithFollowUps.context };
+  }
+
   function onSend(textFromChip) {
     const q = safeText(textFromChip ?? input);
     if (!q) return;
 
+    const match = tryMatchTypedFollowUp(q);
+    if (match && !textFromChip) {
+      pushUser(q);
+      setInput("");
+      focusInput();
+      handleFollowUpClick(match.label, match.context);
+      return;
+    }
+
     pushUser(q);
     setInput("");
+    focusInput();
 
     if (loadingCatalog) {
       pushAssistant({ text: "Ainda estou carregando o catálogo… tenta de novo em instantes." });
@@ -336,91 +471,156 @@ export default function Chat() {
     <div className="chat-page">
       <div className="chat-container">
         <div className="chat-messages">
-          {messages.map((msg, idx) => (
-            <div
-              key={idx}
-              className={`chat-bubble-row ${msg.role === "user" ? "is-user" : "is-assistant"}`}
-            >
-              <div className={`chat-bubble ${msg.role === "user" ? "user" : "assistant"}`}>
-                <div className="chat-text">{msg.text}</div>
+          {messages.map((msg, idx) => {
+            const canShowExtras =
+              msg.role !== "assistant" ||
+              msg.isLoading ||
+              typedDone[msg.id] ||
+              msg.id !== lastAssistantId;
 
-                {Array.isArray(msg.preview) && msg.preview.length ? (
-                  <div className="result-preview">
-                    <div className="result-preview-title">Prévia do resultado</div>
+            return (
+              <div
+                key={msg.id ?? idx}
+                className={`chat-row ${msg.role === "user" ? "is-user" : "is-assistant"}`}
+              >
+                {msg.role === "assistant" ? (
+                  <div className="chat-avatar" title="Iracema">
+                    <img src={avatarIracema} alt="Iracema" />
+                  </div>
+                ) : null}
 
-                    <div className="result-preview-table-wrap">
-                      <table className="result-preview-table">
-                        <thead>
-                          <tr>
-                            {Object.keys(msg.preview[0] || {}).map((k) => (
-                              <th key={k}>{k}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {msg.preview.map((row, i) => (
-                            <tr key={i}>
+                <div className={`chat-bubble ${msg.role === "user" ? "user" : "assistant"}`}>
+
+                  <div className="chat-text">
+                    {msg.role === "assistant" && !msg.isLoading ? (
+                      <TypewriterText
+                        text={msg.text}
+                        animate={msg.id === lastAssistantId && !typedDone[msg.id]}
+                        speed={10}
+                        onTick={scrollToBottom}
+                        onDone={() => {
+                          markDone(msg.id);
+                          scrollToBottom();
+                        }}
+                      />
+                    ) : (
+                      msg.text
+                    )}
+                  </div>
+
+                  {msg.isLoading ? (
+                    <div className="chat-loading-row">
+                      <i className="pi pi-spin pi-spinner chat-loading-icon" />
+                      <span>Processando…</span>
+                    </div>
+                  ) : null}
+
+                  {canShowExtras && Array.isArray(msg.preview) && msg.preview.length ? (
+                    <div className="result-preview">
+                      <div className="result-preview-title">Prévia do resultado</div>
+
+                      <div className="result-preview-table-wrap">
+                        <table className="result-preview-table">
+                          <thead>
+                            <tr>
                               {Object.keys(msg.preview[0] || {}).map((k) => (
-                                <td key={k}>{String(row?.[k] ?? "")}</td>
+                                <th key={k}>{k}</th>
                               ))}
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ) : null}
-
-                {msg.suggestions?.length ? (
-                  <div className="suggestions">
-                    {msg.suggestions.map((s) => (
-                      <div key={s.id} className="suggestion-card">
-                        <div className="suggestion-title">{s.title}</div>
-                        <div className="suggestion-path">{s.path}</div>
-                        <div className="suggestion-meta">
-                          {s.year ? <span className="tag">Ano: {s.year}</span> : null}
-                          {s.source ? <span className="tag tag-long">Fonte: {s.source}</span> : null}
-                          <span className="tag tag-outline">{s.reason}</span>
-                        </div>
-
-                        <div className="suggestion-actions">
-                          <button className="btn-mini" onClick={() => onSelectTable(s.id)}>
-                            Selecionar
-                          </button>
-                        </div>
+                          </thead>
+                          <tbody>
+                            {msg.preview.map((row, i) => (
+                              <tr key={i}>
+                                {Object.keys(msg.preview[0] || {}).map((k) => (
+                                  <td key={k}>{String(row?.[k] ?? "")}</td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
-                    ))}
-                  </div>
-                ) : null}
+                    </div>
+                  ) : null}
 
-                {msg.followUps?.length ? (
-                  <div className="followups">
-                    {msg.followUps.map((f) => (
-                      <button
-                        key={f}
-                        className="chip"
-                        onClick={() => handleFollowUpClick(f, msg.context)}
-                      >
-                        {f}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
+                  {canShowExtras && msg.suggestions?.length ? (
+                    <div className="suggestions">
+                      {msg.suggestions.map((s) => (
+                        <div key={s.id} className="suggestion-card">
+                          <div className="suggestion-title">{s.title}</div>
+                          <div className="suggestion-path">{s.path}</div>
+                          <div className="suggestion-meta">
+                            {s.year ? <span className="tag">Ano: {s.year}</span> : null}
+                            {s.source ? (
+                              <span className="tag tag-long" title={s.source}>
+                                Fonte: {s.source}
+                              </span>
+                            ) : null}
+                            <span className="tag tag-outline">{s.reason}</span>
+                          </div>
+
+                          <div className="suggestion-actions">
+                            <button onMouseDown={(e) => e.preventDefault()} className="btn-mini" onClick={() => { onSelectTable(s.id); focusInput(); }}>
+                              Selecionar
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {canShowExtras && msg.followUps?.length ? (
+                    <div className="followups">
+                      {msg.followUps.map((f) => (
+                        <button
+                          onMouseDown={(e) => e.preventDefault()}
+                          key={f}
+                          className="chip"
+                          onClick={() => handleFollowUpClick(f, msg.context)}
+                        >
+                          {f}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            )
+          }
+          )}
+
+          {loadingCatalog ? (
+            <div className="chat-row is-assistant">
+              <div className="chat-avatar" title="Iracema">
+                <img src={avatarIracema} alt="Iracema" />
+              </div>
+
+              <div className="chat-bubble assistant">
+                <div className="chat-text">
+                  <i className="pi pi-spin pi-spinner chat-loading-icon inline" />
+                  Carregando catálogo…
+                </div>
               </div>
             </div>
-          ))}
+          ) : null}
           <div ref={bottomRef} />
         </div>
 
         <div className="chat-inputbar">
+
+
+          {loadingCatalog && (
+            <i className="pi pi-spin pi-spinner chat-loading-icon" />
+          )}
+
           <input
-            className="chat-input"
+            className="chat-input" ref={inputRef}
+
             placeholder={
               loadingCatalog
                 ? "Carregando catálogo..."
                 : mode === "ask"
-                ? "Digite sua pergunta sobre a tabela selecionada…"
-                : "Descreva o que você procura no catálogo… (ou digite o título/ID para selecionar direto)"
+                  ? "Digite sua pergunta sobre a tabela selecionada…"
+                  : "Descreva o que você procura no catálogo…"
             }
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -429,16 +629,23 @@ export default function Chat() {
           />
 
           <button
+            onMouseDown={(e) => e.preventDefault()}
             className="chat-reset"
             onClick={resetChat}
             disabled={loadingCatalog && !docs.length}
             title="Resetar conversa"
           >
-            Recomeçar
+            <i className="pi pi-refresh" /> Recomeçar
           </button>
 
-          <button className="chat-send" onClick={() => onSend()} disabled={loadingCatalog}>
-            Enviar
+          <button onMouseDown={(e) => e.preventDefault()} className="chat-send" onClick={() => onSend()} disabled={loadingCatalog || sending}>
+            {sending ? (
+              <i className="pi pi-spin pi-spinner" />
+            ) : (
+              <>
+                <i className="pi pi-send" /> Enviar
+              </>
+            )}
           </button>
         </div>
 
@@ -447,3 +654,72 @@ export default function Chat() {
     </div>
   );
 }
+
+function TypewriterText({ text, animate, speed = 22, onDone, onTick }) {
+  const [shown, setShown] = useState(animate ? "" : (text || ""));
+  const rafRef = useRef(null);
+  const lastAtRef = useRef(0);
+  const iRef = useRef(0);
+  const doneRef = useRef(false);
+
+  // throttle de scroll/tick
+  const lastTickRef = useRef(0);
+  const TICK_EVERY_MS = 60;
+
+  useEffect(() => {
+    doneRef.current = false;
+    iRef.current = 0;
+    lastAtRef.current = 0;
+    lastTickRef.current = 0;
+    setShown(animate ? "" : (text || ""));
+
+    if (!animate) {
+      onDone?.();
+      return;
+    }
+
+    const full = text || "";
+
+    const tick = (t) => {
+      if (doneRef.current) return;
+
+      if (!lastAtRef.current) lastAtRef.current = t;
+      const elapsed = t - lastAtRef.current;
+
+      const step = Math.floor(elapsed / speed);
+
+      if (step > 0) {
+        // mantém resto de tempo (não perde precisão)
+        lastAtRef.current = lastAtRef.current + step * speed;
+
+        iRef.current = Math.min(full.length, iRef.current + step);
+        setShown(full.slice(0, iRef.current));
+
+        // chama onTick (throttled)
+        if (onTick) {
+          if (!lastTickRef.current) lastTickRef.current = t;
+          if (t - lastTickRef.current >= TICK_EVERY_MS) {
+            lastTickRef.current = t;
+            onTick();
+          }
+        }
+
+        if (iRef.current >= full.length) {
+          doneRef.current = true;
+          onDone?.();
+          return;
+        }
+      }
+
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [text, animate, speed, onDone, onTick]);
+
+  return <span>{shown}</span>;
+}
+
