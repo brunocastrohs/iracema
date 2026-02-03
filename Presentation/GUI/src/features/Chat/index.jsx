@@ -168,10 +168,34 @@ export default function Chat() {
     // 1) mostra 1 único bubble de loading
     pushAssistant({ text: "Consultando…", isLoading: true });
 
+    const explain = localStorage.getItem("iracema_explain") === "true";
+    const preferredStrategy = localStorage.getItem("iracema_strategy") || "ask/fc";
+
+    // decide fallback conforme regra
+    const fallbackStrategy =
+      preferredStrategy === "ask/fc"
+        ? "ask"
+        : preferredStrategy === "ask"
+          ? "ask/fc"
+          : "ask/fc";
+
+    async function tryAsk(strategy) {
+      const res = await askChat({
+        question,
+        table_identifier: selectedTableId,
+        top_k: 1000,
+        explain,
+        strategy,
+      });
+
+      // normaliza erro para decisão de fallback
+      const failed = !res?.ok || Boolean(res?.data?.error);
+      return { ...res, failed, usedStrategy: strategy };
+    }
+
     try {
       if (!selectedTableId) {
         setMode("catalog");
-        // remove o loading e informa
         setMessages((prev) => [
           ...removeTrailingLoading(prev),
           {
@@ -184,31 +208,39 @@ export default function Chat() {
         return;
       }
 
-      const explain = localStorage.getItem("iracema_explain") === "true";
-      const strategy = localStorage.getItem("iracema_strategy") || "ask/fc";
+      // 1ª tentativa
+      let result = await tryAsk(preferredStrategy);
 
-      const { ok, data, error } = await askChat({
-        question,
-        table_identifier: selectedTableId,
-        top_k: 1000,
-        explain,
-        strategy,
-      });
+      // fallback: só se falhou e fallback for diferente do preferido
+      if (result.failed && fallbackStrategy !== preferredStrategy) {
+        result = await tryAsk(fallbackStrategy);
+      }
 
       setMessages((prev) => {
         const base = removeTrailingLoading(prev);
 
-        if (!ok) {
+        // se ainda falhou
+        if (!result.ok) {
           return [
             ...base,
-            { id: newMsgId(), role: "assistant", ts: now(), text: `Erro: ${error || "falha no /chat/ask"}` },
+            {
+              id: newMsgId(),
+              role: "assistant",
+              ts: now(),
+              text: `Erro (${result.usedStrategy}): ${result.error || "falha no /chat/ask"}`,
+            },
           ];
         }
 
-        if (data?.error) {
+        if (result.data?.error) {
           return [
             ...base,
-            { id: newMsgId(), role: "assistant", ts: now(), text: `Erro: ${data.error}` },
+            {
+              id: newMsgId(),
+              role: "assistant",
+              ts: now(),
+              text: `Erro (${result.usedStrategy}): ${result.data.error}`,
+            },
           ];
         }
 
@@ -218,8 +250,8 @@ export default function Chat() {
             id: newMsgId(),
             role: "assistant",
             ts: now(),
-            text: safeText(data?.answer_text) || "Sem resposta textual.",
-            preview: Array.isArray(data?.result_preview) ? data.result_preview : [],
+            text: safeText(result.data?.answer_text) || "Sem resposta textual.",
+            preview: Array.isArray(result.data?.result_preview) ? result.data.result_preview : [],
             followUps: ["Nova pergunta", "Trocar tabela"],
           },
         ];
@@ -227,13 +259,19 @@ export default function Chat() {
     } catch (e) {
       setMessages((prev) => [
         ...removeTrailingLoading(prev),
-        { id: newMsgId(), role: "assistant", ts: now(), text: "Erro inesperado ao consultar. Tente novamente." },
+        {
+          id: newMsgId(),
+          role: "assistant",
+          ts: now(),
+          text: "Erro inesperado ao consultar. Tente novamente.",
+        },
       ]);
     } finally {
       setSending(false);
       focusInput();
     }
   }
+
 
   function removeTrailingLoading(list) {
     const copy = [...list];
