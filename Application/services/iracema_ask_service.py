@@ -218,7 +218,7 @@ class IracemaAskService(IIracemaAskService):
                     rowcount=rowcount,
                 )
             else:
-                answer_text = "Usuário não requisitou explicação."
+                answer_text = ""
             print("7 executado")
             
             # 8) Registrar msg do assistente

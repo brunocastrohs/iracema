@@ -94,11 +94,11 @@ export default function Chat() {
       ...(loadingCatalog
         ? []
         : [
-            makeAssistantMessage({
-              text: `Catálogo ainda está carregado (${docs.length} tabelas ativas). Pode perguntar!`,
-              suggestedPrompts: ["buscar: fiscalização", "buscar: unidades de conservação"],
-            }),
-          ]),
+          makeAssistantMessage({
+            text: `Catálogo ainda está carregado (${docs.length} tabelas ativas). Pode perguntar!`,
+            suggestedPrompts: ["buscar: fiscalização", "buscar: unidades de conservação"],
+          }),
+        ]),
     ]);
   }
 
@@ -181,16 +181,20 @@ export default function Chat() {
         if (!result.ok) {
           return [
             ...base,
-            makeAskErrorMessage(result.usedStrategy, result.error),
-            makeAssistantMessage({ suggestedPrompts: pushSuggestedPromptsForAsk() }),
+            {
+              ...makeAskErrorMessage(result.usedStrategy, result.error),
+              suggestedPrompts: pushSuggestedPromptsForAsk(),
+            },
           ];
         }
 
         if (result.data?.error) {
           return [
             ...base,
-            makeAskErrorMessage(result.usedStrategy, result.data.error),
-            makeAssistantMessage({ suggestedPrompts: pushSuggestedPromptsForAsk() }),
+            {
+              ...makeAskErrorMessage(result.usedStrategy, result.data.error),
+              suggestedPrompts: pushSuggestedPromptsForAsk(),
+            },
           ];
         }
 
@@ -426,12 +430,12 @@ export default function Chat() {
       suggestedPrompts: refinements.length
         ? refinements
         : [
-            suggestions[0]?.id ? `usar ${suggestions[0].id}` : null,
-            "ano: 2022",
-            "categoria: biodiversidade",
-            "fonte: mapbiomas",
-            "trocar tabela",
-          ].filter(Boolean),
+          suggestions[0]?.id ? `usar ${suggestions[0].id}` : null,
+          "ano: 2022",
+          "categoria: biodiversidade",
+          "fonte: mapbiomas",
+          "trocar tabela",
+        ].filter(Boolean),
     });
   }
 

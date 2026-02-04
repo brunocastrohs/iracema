@@ -42,7 +42,7 @@ export function makeAskErrorMessage(strategy, msg) {
 
 export function makeAskSuccessMessage({ answer_text, result_preview }) {
   return makeAssistantMessage({
-    text: String(answer_text || "").trim() || "Sem resposta textual.",
+    text: String(answer_text || "").trim() || "",
     preview: Array.isArray(result_preview) ? result_preview : [],
     followUps: [ "Trocar tabela"],
   });

@@ -13,9 +13,13 @@ export default function ChatMessageItem({
   onSuggestPrompt,
   onTickScroll,
 }) {
+
+  const hasText = Boolean(String(msg.text || "").trim());
+
   const canShowExtras =
     msg.role !== "assistant" ||
     msg.isLoading ||
+    !hasText ||                 
     typedDone[msg.id] ||
     msg.id !== lastAssistantId;
 
@@ -28,22 +32,24 @@ export default function ChatMessageItem({
       ) : null}
 
       <div className={`chat-bubble ${msg.role === "user" ? "user" : "assistant"}`}>
-        <div className="chat-text">
-          {msg.role === "assistant" && !msg.isLoading ? (
-            <TypewriterText
-              text={msg.text || ""}
-              animate={msg.id === lastAssistantId && !typedDone[msg.id]}
-              speed={10}
-              onTick={onTickScroll}
-              onDone={() => {
-                markDone(msg.id);
-                onTickScroll?.();
-              }}
-            />
-          ) : (
-            msg.text
-          )}
-        </div>
+        {hasText ? (
+          <div className="chat-text">
+            {msg.role === "assistant" && !msg.isLoading ? (
+              <TypewriterText
+                text={msg.text || ""}
+                animate={msg.id === lastAssistantId && !typedDone[msg.id]}
+                speed={10}
+                onTick={onTickScroll}
+                onDone={() => {
+                  markDone(msg.id);
+                  onTickScroll?.();
+                }}
+              />
+            ) : (
+              msg.text
+            )}
+          </div>
+        ) : null}
 
         {msg.isLoading ? (
           <div className="chat-loading-row">

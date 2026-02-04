@@ -185,7 +185,7 @@ class IracemaAskByFCService(IIracemaAskByFCService):
                     rowcount=rowcount,
                 )
             else:
-                answer_text = "Usuário não requisitou explicação."
+                answer_text = ""
 
             assistant_message = self._message_repo.add_message(
                 session=session,
