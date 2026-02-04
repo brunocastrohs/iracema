@@ -2,7 +2,7 @@
 import { normalizeLite, safeText } from "../helpers";
 import { resolveTableByText } from "../helpers";
 
-// --- util ---
+// -------------------- util --------------------
 function hasAny(reList, text) {
   return reList.some((re) => re.test(text));
 }
@@ -13,7 +13,6 @@ function extractYear(text) {
 }
 
 function extractPosition(text) {
-  // "primeira", "segunda", "3a", "terceira"
   const t = normalizeLite(text);
   if (/\bprimeir[ao]\b/.test(t)) return 1;
   if (/\bsegund[ao]\b/.test(t)) return 2;
@@ -24,16 +23,12 @@ function extractPosition(text) {
 }
 
 function extractSourceHint(text) {
-  // bem simples: pega depois de "fonte:"
-  const t = safeText(text);
-  const m = t.match(/fonte\s*[:\-]\s*(.+)$/i);
+  const m = safeText(text).match(/fonte\s*[:\-]\s*(.+)$/i);
   return m?.[1]?.trim() ?? null;
 }
 
 function extractCategoryHint(text) {
-  // "categoria: X"
-  const t = safeText(text);
-  const m = t.match(/categor(ia|ía)\s*[:\-]\s*(.+)$/i);
+  const m = safeText(text).match(/categor(ia|ía)\s*[:\-]\s*(.+)$/i);
   return m?.[2]?.trim() ?? null;
 }
 
@@ -56,29 +51,24 @@ function isDeicticThis(text) {
 function pickFromLastSuggestions({ lastSuggestions = [], year, sourceHint, position }) {
   if (!Array.isArray(lastSuggestions) || lastSuggestions.length === 0) return null;
 
-  // 1) posição explícita (1 = primeira)
   if (position && position >= 1 && position <= lastSuggestions.length) {
     return lastSuggestions[position - 1];
   }
 
-  // 2) filtra por ano
   let pool = lastSuggestions;
+
   if (year) pool = pool.filter((s) => String(s.year ?? "") === String(year));
 
-  // 3) filtra por fonte
   if (sourceHint) {
     const sh = normalizeLite(sourceHint);
     pool = pool.filter((s) => normalizeLite(s.source || "").includes(sh));
   }
 
-  // 4) retorna melhor candidato (primeiro)
   return pool[0] ?? lastSuggestions[0] ?? null;
 }
 
-// --- Intents ---
-// Retorno padrão:
-// { intent, confidence, entities: { ... }, debug? }
-export function interpretIntent(rawText, ctx) {
+// -------------------- parsing --------------------
+function makeParsed(rawText) {
   const text = safeText(rawText);
   const t = normalizeLite(text);
 
@@ -87,14 +77,27 @@ export function interpretIntent(rawText, ctx) {
   const sourceHint = extractSourceHint(text);
   const categoryHint = extractCategoryHint(text);
 
-  // ====== intents fortes (alta precisão) ======
+  return { text, t, year, position, sourceHint, categoryHint };
+}
 
-  // RESET
-  if (hasAny([/\b(recome(c|ç)ar|resetar|limpar)\b/], t)) {
+function baseEntities(p) {
+  return {
+    year: p.year,
+    sourceHint: p.sourceHint,
+    position: p.position,
+    categoryHint: p.categoryHint,
+  };
+}
+
+// -------------------- handlers (um por intent) --------------------
+function tryReset(p) {
+  if (hasAny([/\b(recome(c|ç)ar|resetar|limpar)\b/], p.t)) {
     return { intent: "RESET", confidence: 0.99, entities: {} };
   }
+  return null;
+}
 
-  // SWITCH_TABLE
+function trySwitchTable(p) {
   if (
     hasAny(
       [
@@ -102,89 +105,128 @@ export function interpretIntent(rawText, ctx) {
         /\b(outra|outras)\b.*\b(tabela|camada|fonte)\b/,
         /^\btrocar tabela\b$/,
       ],
-      t
+      p.t
     )
   ) {
     return { intent: "SWITCH_TABLE", confidence: 0.95, entities: {} };
   }
+  return null;
+}
 
-  // HELP
-  if (hasAny([/\b(ajuda|como usar|o que você faz|instru(c|ç)(ões|ao))\b/], t)) {
+function tryHelp(p) {
+  if (hasAny([/\b(ajuda|como usar|o que você faz|instru(c|ç)(ões|ao))\b/], p.t)) {
     return { intent: "HELP", confidence: 0.85, entities: {} };
   }
+  return null;
+}
 
-  // DETAILS
+function tryDetails(p) {
   if (
     hasAny(
       [
-        /\b(detalhes|colunas|campos|schema|descri(c|ç)(ão|ao))\b/,
+        /\bdetalhar\b/,
+        /\bdetalhes\b/,
+        /\bcolunas\b/,
+        /\b(campos|schema|descri(c|ç)(ão|ao))\b/,
         /\bquais\s+s(ã|a)o\s+as\s+colunas\b/,
         /\bmostra(r)?\s+(as\s+)?colunas\b/,
       ],
-      t
+      p.t
     )
   ) {
-    // tentar resolver alvo
     return {
       intent: "DETAILS",
       confidence: 0.9,
-      entities: { year, sourceHint, position, categoryHint },
+      entities: baseEntities(p),
     };
   }
+  return null;
+}
 
-  // SELECT (usar/confirmar)
+function trySelect(p) {
   if (
     hasAny(
       [
         /^\b(usar|use|selecionar|seleciona|confirmar|confirma)\b/,
         /\b(vai com|vamos com)\b/,
       ],
-      t
+      p.t
     )
   ) {
     return {
       intent: "SELECT",
       confidence: 0.9,
-      entities: { year, sourceHint, position, categoryHint, selectionText: text },
+      entities: { ...baseEntities(p), selectionText: p.text },
     };
   }
+  return null;
+}
 
-  // REFINE (ano/categoria/fonte soltos)
-  if (hasAny([/\b(ano)\b/, /\bcategor(ia|ía)\b/, /\bfonte\b/], t) && (year || sourceHint || categoryHint)) {
+function tryRefine(p) {
+  const hasRefineWords = hasAny([/\bano\b/, /\bcategor(ia|ía)\b/, /\bfonte\b/], p.t);
+  const hasAnyEntity = Boolean(p.year || p.sourceHint || p.categoryHint);
+
+  if (hasRefineWords && hasAnyEntity) {
     return {
       intent: "REFINE",
       confidence: 0.7,
-      entities: { year, sourceHint, categoryHint },
+      entities: { year: p.year, sourceHint: p.sourceHint, categoryHint: p.categoryHint },
     };
   }
+  return null;
+}
 
-  // ====== intents contextuais ======
-  // "essa", "a segunda", "a de 2022" -> normalmente SELECT ou DETAILS dependendo do verbo
-  if (isDeicticThis(text) || position || year || sourceHint) {
-    // se contém palavra tipo "usar"/"confirmar" já caiu em SELECT acima.
-    // aqui: se modo ask -> pergunta; se catalog -> interpretar como SELECT implícito
+function trySelectImplicit(p, ctx) {
+  // contextual: "essa", "a segunda", "a de 2022", "COBIO" etc.
+  if (isDeicticThis(p.text) || p.position || p.year || p.sourceHint) {
     return {
       intent: "SELECT_IMPLICIT",
       confidence: 0.6,
-      entities: { year, sourceHint, position, categoryHint },
+      entities: baseEntities(p),
     };
   }
-
-  // ====== fallback por modo ======
-  // Se está em ASK, qualquer texto vira pergunta
-  if (ctx?.mode === "ask") {
-    return { intent: "ASK_QUESTION", confidence: 0.8, entities: { question: text } };
-  }
-
-  // Se está em CATALOG, qualquer texto vira busca
-  return { intent: "CATALOG_SEARCH", confidence: 0.7, entities: { query: text, year, sourceHint, categoryHint } };
+  return null;
 }
 
-// Resolve “qual tabela?” baseado no contexto: seleção direta, ou últimas sugestões
+function fallbackByMode(p, ctx) {
+  if (ctx?.mode === "ask") {
+    return { intent: "ASK_QUESTION", confidence: 0.8, entities: { question: p.text } };
+  }
+  return {
+    intent: "CATALOG_SEARCH",
+    confidence: 0.7,
+    entities: { query: p.text, year: p.year, sourceHint: p.sourceHint, categoryHint: p.categoryHint },
+  };
+}
+
+// -------------------- public API --------------------
+export function interpretIntent(rawText, ctx) {
+  const p = makeParsed(rawText);
+
+  // ordem = do mais “forte” ao mais “fraco”
+  const handlers = [
+    tryReset,
+    trySwitchTable,
+    tryHelp,
+    tryDetails,
+    trySelect,
+    tryRefine,
+    (pp) => trySelectImplicit(pp, ctx),
+  ];
+
+  for (const h of handlers) {
+    const r = h(p, ctx);
+    if (r) return r;
+  }
+
+  return fallbackByMode(p, ctx);
+}
+
+// -------------------- target resolution (mantém igual) --------------------
 export function resolveTargetTable({ rawText, docs, index, selectedTableId, lastSuggestions }) {
   const text = safeText(rawText);
 
-  // 1) se o usuário colou id/título, usa seu resolveTableByText
+  // 1) se o usuário colou id/título, usa resolveTableByText
   const r = resolveTableByText({ query: text, docs, index });
   if (r?.doc) return { kind: "doc", doc: r.doc, directContinue: r.directContinue };
 
@@ -194,7 +236,7 @@ export function resolveTargetTable({ rawText, docs, index, selectedTableId, last
     if (d) return { kind: "doc", doc: d, directContinue: true };
   }
 
-  // 3) tentar resolver por lastSuggestions (primeira/segunda/ano/fonte)
+  // 3) tentar resolver por lastSuggestions
   const t = normalizeLite(text);
   const year = extractYear(t);
   const position = extractPosition(t);
