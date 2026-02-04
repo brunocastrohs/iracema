@@ -466,38 +466,3 @@
 .chat-text {
   white-space: pre-wrap;
 }
-
-/* Sugestões estilo ChatGPT (discreto, não “botão de bot”) */
-.prompt-suggestions {
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(15, 23, 42, 0.08);
-}
-
-.prompt-suggestions-title {
-  font-size: 12px;
-  font-weight: 800;
-  color: rgba(15, 23, 42, 0.70);
-  margin-bottom: 8px;
-}
-
-.prompt-suggestions-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.prompt-suggestion {
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: #ffffff;
-  color: #0f172a;
-  border-radius: 999px;
-  padding: 7px 10px;
-  font-size: 12px;
-  font-weight: 650;
-  cursor: pointer;
-}
-
-.prompt-suggestion:hover {
-  background: #f3f4f6;
-}
