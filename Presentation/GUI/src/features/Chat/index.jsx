@@ -266,7 +266,9 @@ export default function Chat() {
         lastSuggestions: lastSuggestionsRef.current,
       });
 
-      const doc = resolved.kind === "doc" ? resolved.doc : docs.find((d) => d.id === selectedTableId);
+      const doc = resolved.kind === "doc"
+        ? resolved.doc
+        : docs.find((d) => d.id === selectedTableId);
 
       if (!doc) {
         pushAssistant({
@@ -278,12 +280,22 @@ export default function Chat() {
         return true;
       }
 
+      setSelectedTableId(doc.id);
+      setMode("ask");
+
       pushAssistant({
         text: formatDetails(doc),
-        suggestedPrompts: [`usar ${doc.id}`, "trocar tabela"],
+        suggestedPrompts: [
+          "consultar todos os idpan e pan",
+          "quais são os valores distintos?",
+          "traga um resumo em 5 tópicos",
+          "trocar tabela",
+        ],
       });
+
       return true;
     }
+
 
     // SELECT / SELECT_IMPLICIT
     if (nlu.intent === "SELECT" || nlu.intent === "SELECT_IMPLICIT") {

@@ -221,15 +221,6 @@ def build_prompt_inicial_fc(
     cols: List[Dict[str, Any]],
     question_placeholder: str = "{PERGUNTA_DO_USUARIO}",
 ) -> str:
-    """
-    Prompt base para Function Calling (geração de argumentos estruturados / QueryPlan JSON).
-    - NÃO pede SQL.
-    - Pede JSON válido compatível com um schema de QueryPlanArgs.
-
-    Observação: este prompt é “provider-agnostic”. Se você usar Structured Outputs
-    no Ollama, este texto serve como contexto e as constraints vêm do schema.
-    """
-    # Lista de colunas não-geom (recomendadas)
     non_geom_cols: List[str] = []
     geom_cols: List[str] = []
 
@@ -245,7 +236,6 @@ def build_prompt_inicial_fc(
     non_geom_str = ", ".join(non_geom_cols) if non_geom_cols else "(nenhuma detectada)"
     geom_str = ", ".join(geom_cols) if geom_cols else "(nenhuma)"
 
-    # Ajuda de tipos (para FC escolher coluna de soma)
     numeric_cols = []
     text_cols = []
     for c in cols or []:
@@ -253,7 +243,6 @@ def build_prompt_inicial_fc(
         ctype = str(c.get("type") or "").lower()
         if not name or c.get("is_geometry"):
             continue
-
         if any(t in ctype for t in ["numeric", "double", "real", "float", "int", "bigint", "smallint", "decimal"]):
             numeric_cols.append(name)
         else:
@@ -267,7 +256,7 @@ def build_prompt_inicial_fc(
 REGRAS OBRIGATÓRIAS:
 - NÃO gere SQL.
 - NÃO gere explicações em texto.
-- RETORNE APENAS um JSON (argumentos) compatível com o schema de QueryPlanArgs.
+- RETORNE APENAS um JSON compatível com QueryPlanArgsDto.
 - Use SOMENTE colunas existentes na tabela.
 - NUNCA use colunas geométricas para cálculos, filtros, agrupamentos ou seleção.
 
@@ -289,21 +278,33 @@ COLUNAS GEOMÉTRICAS (PROIBIDAS):
 INTENÇÕES SUPORTADAS (campo 'intent'):
 - schema        -> listar colunas / estrutura
 - count         -> contar registros
-- distinct      -> listar valores distintos de uma coluna
+- distinct      -> listar valores distintos (1+ colunas)
 - sum           -> somar valores de uma coluna numérica
-- grouped_sum   -> somar valores agrupados por uma coluna
-- detail        -> retornar linhas detalhadas (limitadas)
+- grouped_sum   -> somar valores agrupados por 1+ colunas
+- detail        -> retornar linhas detalhadas (pode selecionar 1+ colunas)
 
-DICAS:
-- Se a pergunta tiver "quantos", use intent="count"
-- Se tiver "valores", "quais são", "distintos", use intent="distinct"
-- Se tiver "total", "somar", "soma", use intent="sum" ou "grouped_sum" se mencionar "por/cada"
-- Se mencionar uma coluna explicitamente, use essa coluna
-- Se não mencionar, escolha a melhor coluna conforme o tipo (numérica para soma; textual para agrupar)
+MAPEAMENTO OBRIGATÓRIO PARA DETAIL (MULTI-COLUNA):
+- Se a pergunta pedir "consultar/trazer/mostrar/listar A e B" (ou múltiplas colunas),
+  use intent="detail" e preencha "select_columns" com uma LISTA de colunas.
+  Exemplo: "Consultar data e num_proces" -> intent="detail", select_columns=["data","num_proces"].
+
+REGRAS PARA CAMPOS:
+- detail:
+  - use select_columns (lista) quando houver colunas explícitas.
+  - se o usuário não citar colunas, pode omitir select_columns (executor usa "*").
+- distinct:
+  - use select_columns com 1+ colunas para DISTINCT.
+- grouped_sum:
+  - group_by DEVE ser lista (1+ colunas).
+  - value_column DEVE ser uma coluna numérica.
 
 PERGUNTA:
 {question_placeholder}
+
+RETORNE APENAS JSON. Sem markdown. Sem texto extra.
+Campos esperados: intent, select_columns, target_column, value_column, group_by, filters, order_by, order_dir, limit.
 """
+
 
 
 # -----------------------------------------------------------------------------

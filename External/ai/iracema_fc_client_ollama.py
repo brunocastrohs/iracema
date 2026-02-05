@@ -40,6 +40,8 @@ class IracemaFCOllamaClient(IIracemaFCClient):
             "\n\nRETORNE APENAS JSON. Sem markdown. Sem texto extra.\n"
             "Campos esperados: intent, target_column, value_column, group_by, filters, limit.\n"
         )
+        
+        print(prompt)
 
         raw = self.llm.invoke(prompt)
         data = _extract_json(raw)

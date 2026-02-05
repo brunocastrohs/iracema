@@ -177,7 +177,10 @@ function tryRefine(p) {
 }
 
 function trySelectImplicit(p, ctx) {
-  // contextual: "essa", "a segunda", "a de 2022", "COBIO" etc.
+
+  if (ctx?.mode === "ask") return null;
+
+  // Em modo CATALOG, "essa", "a segunda", "a de 2022" etc. pode ser seleção implícita
   if (isDeicticThis(p.text) || p.position || p.year || p.sourceHint) {
     return {
       intent: "SELECT_IMPLICIT",
@@ -185,8 +188,10 @@ function trySelectImplicit(p, ctx) {
       entities: baseEntities(p),
     };
   }
+
   return null;
 }
+
 
 function fallbackByMode(p, ctx) {
   if (ctx?.mode === "ask") {
@@ -213,6 +218,7 @@ export function interpretIntent(rawText, ctx) {
     tryRefine,
     (pp) => trySelectImplicit(pp, ctx),
   ];
+
 
   for (const h of handlers) {
     const r = h(p, ctx);
