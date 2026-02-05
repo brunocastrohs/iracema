@@ -1,15 +1,26 @@
+# Application/helpers/query_plan_sql_compiler_helper.py
 from Application.dto.iracema_query_plan_dto import QueryPlanArgsDto
 from Application.helpers.sql_types_helper import SqlPlan
-from Application.helpers.query_plan_validator_helper import _normalize_group_by
+from Application.helpers.query_plan_validator_helper import _normalize_group_by, _normalize_str_list
+
 
 def _quote_ident(name: str) -> str:
     # simples: assume nome seguro vindo do whitelist
     return name
 
-def compile_query_plan_to_sql(table_fqn: str, plan: QueryPlanArgsDto, top_k: int) -> SqlPlan:
-    intent = plan.intent
 
-    # decide limite final
+def compile_query_plan_to_sql(table_fqn: str, plan: QueryPlanArgsDto, top_k: int) -> SqlPlan:
+    """
+    Compila QueryPlanArgsDto para SQL determinístico e seguro (colunas já whitelisted no validator).
+    Suporta:
+      - schema
+      - count
+      - distinct (1+ colunas via select_columns)
+      - sum
+      - grouped_sum (1+ colunas em group_by)
+      - detail (1+ colunas via select_columns; fallback "*")
+    """
+    intent = plan.intent
     limit = int(plan.limit) if plan.limit is not None else int(top_k)
 
     if intent == "schema":
@@ -31,8 +42,20 @@ def compile_query_plan_to_sql(table_fqn: str, plan: QueryPlanArgsDto, top_k: int
         return SqlPlan(sql=sql, used_template=True, reason="fc:count")
 
     if intent == "distinct":
+        # ✅ preferir select_columns (multi-coluna)
+        cols_raw = _normalize_str_list(plan.select_columns)
+        if cols_raw:
+            cols = ", ".join(_quote_ident(c) for c in cols_raw)
+            sql = (
+                f"SELECT DISTINCT {cols}\n"
+                f"FROM {table_fqn}\n"
+                f"LIMIT {limit};"
+            )
+            return SqlPlan(sql=sql, used_template=True, reason=f"fc:distinct:{cols}")
+
+        # compat legado (1 coluna)
         if not plan.target_column:
-            raise ValueError("QueryPlan distinct exige target_column.")
+            raise ValueError("QueryPlan distinct exige select_columns ou target_column.")
         col = _quote_ident(plan.target_column)
         sql = (
             f'SELECT DISTINCT {col} AS "Valor"\n'
@@ -54,7 +77,6 @@ def compile_query_plan_to_sql(table_fqn: str, plan: QueryPlanArgsDto, top_k: int
         return SqlPlan(sql=sql, used_template=True, reason=f"fc:sum:{col}")
 
     if intent == "grouped_sum":
-        print(plan)
         group_cols_raw = _normalize_group_by(plan.group_by)
         if not group_cols_raw or not plan.value_column:
             raise ValueError("QueryPlan grouped_sum exige group_by e value_column.")
@@ -65,7 +87,7 @@ def compile_query_plan_to_sql(table_fqn: str, plan: QueryPlanArgsDto, top_k: int
 
         v = _quote_ident(plan.value_column)
 
-        # opcional: remove linhas com grupo nulo (qualquer um nulo)
+        # remove linhas com grupo nulo (qualquer um nulo)
         not_null_groups = " AND ".join(f"{c} IS NOT NULL" for c in group_cols)
 
         sql = (
@@ -83,7 +105,13 @@ def compile_query_plan_to_sql(table_fqn: str, plan: QueryPlanArgsDto, top_k: int
         )
 
     if intent == "detail":
-        sql = f"SELECT *\nFROM {table_fqn}\nLIMIT {limit};"
+        cols_raw = _normalize_str_list(plan.select_columns)
+        if cols_raw:
+            cols = ", ".join(_quote_ident(c) for c in cols_raw)
+        else:
+            cols = "*"
+
+        sql = f"SELECT {cols}\nFROM {table_fqn}\nLIMIT {limit};"
         return SqlPlan(sql=sql, used_template=True, reason="fc:detail")
 
     raise ValueError(f"intent desconhecido: {intent}")

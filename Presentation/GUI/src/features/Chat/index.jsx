@@ -126,7 +126,7 @@ export default function Chat() {
 
     pushAssistant({
       text:
-        `Encontrei uma fonte de dados bem compatível:\n\n` +
+        `Eis a fonte de dados compatível:\n\n` +
         `• ${doc.title}\n` +
         `• ${doc.path}\n` +
         (doc.year ? `• Ano: ${doc.year}\n` : "") +

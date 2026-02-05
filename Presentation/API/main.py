@@ -15,10 +15,8 @@
 #AUX
 #nvidia-smi
 #htop
-#ollama pull qwen2.5:7b-q4
-#ollama pull phi3
-#ollama pull tinyllama
-
+#curl -fsSL https://ollama.com/install.sh | sh
+#ollama pull phi3:mini && ollama pull sqlcoder:7b && ollama pull qwen2.5:7b-instruct
 
 #Rodar
 #source .venv/bin/activate && uvicorn Presentation.API.main:app --host 0.0.0.0 --port 9090 --reload
