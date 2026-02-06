@@ -1,5 +1,5 @@
 # =========================================
-# IRACEMA - .dockerignore
+# IRACEMA - .dockerignore (Backend)
 # =========================================
 
 # --- Git e controle de versão ---
@@ -41,12 +41,15 @@ build/
 dist/
 htmlcov/
 
-# --- Node / React (somente código necessário será copiado via Dockerfile.ui) ---
+# --- Node / React / Frontend ---
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 package-lock.json
+
+# >>> EXCLUI FRONTEND <<<
+Presentation/GUI/
 
 # --- Docker internos ---
 docker-compose.yml
@@ -62,3 +65,7 @@ tmp/
 .env.local
 appsettings.dev.json
 appsettings.local.json
+
+# --- Vector store local (usar volume no runtime) ---
+.app/.iracema/
+.iracema/
