@@ -1,168 +1,87 @@
-# 📘 **Iracema — Sistema de Consultas Inteligentes sobre Zoneamento Costeiro (ZEEC/CE)**
+# 🧠 Iracema (Backend)
 
-Iracema é um **chatbot geoespacial inteligente** que responde perguntas em linguagem natural sobre os dados de zoneamento costeiro do Ceará (ZEEC), utilizando:
+**Iracema** é um **assistente inteligente orientado a dados**, projetado para interpretar perguntas em linguagem natural, convertê-las em consultas estruturadas sobre **PostgreSQL/PostGIS**, executar essas consultas de forma segura e fornecer explicações opcionais sobre os resultados.
 
-* **Geração de SQL por LLM**
-* **Execução real sobre PostgreSQL/PostGIS**
-* **Explicação semântica dos resultados**
-* **Orquestração segura e auditável**
-* **Arquitetura limpa (Clean Architecture)**
-
-O objetivo do MVP é responder perguntas exclusivamente sobre a tabela:
-
-```
-1201_ce_zeec_zoneamento_p_litora_2021_pol
-```
+> ⚠️ **Iracema NÃO é um chatbot genérico.**  
+> Ela não responde sem consultar dados reais, não “conversa por conversar” e não inventa respostas.  
+> O foco é **consulta estruturada, segurança, auditoria e rastreabilidade**.
 
 ---
 
-# 🧠 **Stack Principal**
+## 🎯 Objetivo
 
-### 🔹 **Backend**
-
-* **FastAPI**
-* **Python 3.11**
-* **SQLAlchemy**
-* **PostgreSQL/PostGIS**
-* **Pydantic v2**
-* **PyJWT (autenticação)**
-
-### 🔹 **LLM / IA**
-
-* **Phi-3 (Ollama)** *ou* qualquer modelo compatível com **OpenAI API**
-* **LangChain**
-* **ChromaDB (RAG opcional)**
-
-### 🔹 **Arquitetura**
-
-* Clean Architecture com 5 camadas:
-
-  * **Models**
-  * **Data**
-  * **Application**
-  * **External**
-  * **Presentation (API)**
+- Consultar bases PostgreSQL/PostGIS usando linguagem natural  
+- Garantir rastreabilidade completa:  
+  **Pergunta → Plano → SQL → Resultado → Explicação**
+- Suportar múltiplos modos de geração de consultas:
+  - Heurístico (templates)
+  - AI (LLM gera SQL)
+  - Function Calling (LLM gera plano JSON → SQL determinístico)
 
 ---
 
-# 📁 **Estrutura do Projeto**
+## 🧭 Arquitetura em Camadas
 
-```
-Iracema/
-│
-├── Models/               # Entidades internas (conversas, mensagens, logs)
-│   ├── iracema_conversation.py
-│   ├── iracema_message.py
-│   ├── iracema_sql_log.py
-│   └── iracema_enums.py
-│
-├── Data/
-│   ├── db_context.py
-│   └── repositories/
-│
-├── Application/
-│   ├── dto/
-│   ├── interfaces/
-│   ├── helpers/
-│   └── services/
-│
-├── External/
-│   ├── ai/
-│   │   ├── llm_provider_base.py
-│   │   ├── openai_llm_provider.py
-│   │   ├── phi3_local_llm_provider.py
-│   │   └── langchain_phi3_provider.py
-│   └── vector/
-│       ├── vector_store_base.py
-│       └── chromadb_vector_store.py
-│
-└── Presentation/
-    ├── API/
-    │   ├── controllers/
-    │   ├── helpers/
-    │   ├── settings.py
-    │   ├── main.py
-    │   └── requirements.txt
-    └── Dockerfile
-```
+- **Presentation** – API FastAPI
+- **Application** – Serviços, DTOs, helpers e regras de negócio
+- **Domain** – Modelos e contratos
+- **Data** – Repositórios e contexto de banco
+- **External** – Integração com LLM (Ollama) e RAG
+- **External/vector** – ChromaDB para cache semântico
 
 ---
 
-# 🔄 **Fluxo de Funcionamento**
-
-## 1. Usuário faz pergunta ao endpoint:
-
-```
-POST /iracema-api/v1/ask
-```
-
-## 2. A Iracema executa o pipeline:
-
-```
-Pergunta → Geração de SQL → Execução no PostgreSQL 
-→ Explicação → Resposta Final
-```
-
-### ✔ **Primeira chamada ao LLM (Phi-3 / OpenAI / Ollama)**
-
-* Gera SQL seguro e validado.
-
-### ✔ **Execução real no banco**
-
-* O SQL roda em PostgreSQL/PostGIS.
-* Apenas SELECT permitido.
-
-### ✔ **Segunda chamada ao LLM**
-
-* Explica o resultado da consulta.
-* Gera texto natural contextualizado.
-
----
-
-# 🗄 **Banco de Dados Utilizado**
-
-No MVP só usamos a tabela:
-
-```sql
-CREATE TABLE IF NOT EXISTS public."1201_ce_zeec_zoneamento_p_litora_2021_pol"
-(
-    gid integer PRIMARY KEY,
-    id numeric,
-    zonas varchar(254),
-    sub_zonas varchar(254),
-    letra_subz varchar(254),
-    perimet_km numeric,
-    area_km2 numeric,
-    geom geometry(MultiPolygon,4674)
-);
-```
-
-> A geometria não é usada no MVP, apenas atributos tabulares.
-
----
-
-# 🚀 **Como Rodar Localmente**
-
-## 1. Instalar dependências do Ubuntu
+## 📁 Estrutura de Pastas
 
 ```bash
-sudo apt update
-
-sudo apt install -y \
-  python3-dev python3-pip build-essential gcc g++ \
-  libssl-dev libffi-dev cmake git \
-  libblas-dev liblapack-dev libstdc++6
+.
+├── Application
+│   ├── dto
+│   ├── helpers
+│   ├── interfaces
+│   ├── mappings
+│   └── services
+│
+├── Data
+│   ├── repositories
+│   └── db_context.py
+│
+├── Domain
+│   ├── interfaces
+│   ├── datasource_model.py
+│   ├── iracema_conversation_context_model.py
+│   ├── iracema_conversation_model.py
+│   ├── iracema_enums.py
+│   ├── iracema_message_model.py
+│   └── iracema_sql_log_model.py
+│
+├── External
+│   ├── ai
+│   │   ├── iracema_fc_client_ollama.py
+│   │   └── langchain_ollama_provider.py
+│   └── vector
+│       ├── chromadb_vector_store.py
+│       └── vector_store_base.py
+│
+└── Presentation
+    └── API
+        ├── controllers
+        │   ├── ask_controller.py
+        │   ├── auth_controller.py
+        │   └── start_controller.py
+        ├── helpers
+        ├── workers
+        │   └── scheduler.py
+        ├── appsettings.dev.json
+        ├── appsettings.docker.json
+        ├── main.py
+        ├── requirements.txt
+        └── settings.py
 ```
 
-## 2. Instalar Ollama (opcional mas recomendado)
+---
 
-```bash
-curl -fsSL https://ollama.com/install.sh | sh
-ollama pull phi3
-ollama serve
-```
-
-## 3. Criar ambiente Python
+## 🚀 Execução Local
 
 ```bash
 python3 -m venv .venv
@@ -170,29 +89,10 @@ source .venv/bin/activate
 pip install -r Presentation/API/requirements.txt
 ```
 
-## 4. Configurar `appsettings.dev.json`
-
-Exemplo:
-
-```json
-{
-  "Database": {
-    "Host": "localhost",
-    "Port": 5432,
-    "User": "postgres",
-    "Password": "123",
-    "Name": "iracema_db"
-  },
-  "LLM": {
-    "ApiKey": "dummy",
-    "BaseUrl": "http://localhost:11434/v1",
-    "ModelSql": "phi3",
-    "ModelExplainer": "phi3"
-  }
-}
+```bash
+export ENVIRONMENT=dev
+export PYTHONPATH=$PWD
 ```
-
-## 5. Iniciar a API
 
 ```bash
 uvicorn Presentation.API.main:app --host 0.0.0.0 --port 9090 --reload
@@ -200,238 +100,77 @@ uvicorn Presentation.API.main:app --host 0.0.0.0 --port 9090 --reload
 
 ---
 
-# 🐋 **Rodar via Docker**
+## 🔐 Autenticação
 
-Build:
+- JWT Bearer
+- Endpoint: `POST /{API_PREFIX}/auth/login`
+- Todas as rotas `/chat/*` exigem token válido
 
-```bash
-docker build -t iracema-api .
-```
-
-Run:
-
-```bash
-docker run -d \
-  -p 9090:9090 \
-  -e ENVIRONMENT=docker \
-  iracema-api
-```
+> ⚠️ Segredos **não devem** ser expostos em repositório ou README.
 
 ---
 
-# 💬 **Exemplo de Requisição**
+## 📬 Endpoints Principais
 
-```bash
-curl -X POST http://localhost:9090/iracema-api/v1/ask \
-  -H "Authorization: Bearer <seu_token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-        "conversationId": null,
-        "question": "Quais são as zonas com maior area_km2?"
-      }'
-```
+- `POST /chat/ask` – pipeline padrão
+- `POST /chat/ask/heuristic` – apenas heurística
+- `POST /chat/ask/ai` – LLM gera SQL
+- `POST /chat/ask/fc` – **Function Calling (recomendado)**
 
 ---
 
-# 📜 **Segurança**
+## 🧠 Function Calling (FC)
 
-Iracema usa:
+No modo FC:
+- O LLM **não gera SQL**
+- Ele retorna um **plano JSON estruturado**
+- O backend:
+  - valida colunas
+  - aplica regras de segurança
+  - compila SQL determinístico
+  - executa e audita
 
-* JWT baseado em PyJWT
-* Logs completos de:
-
-  * perguntas
-  * SQL gerados
-  * respostas
-* Regras de segurança:
-
-  * Somente `SELECT` permitido
-  * SQL validado previamente
-  * Conversas e mensagens persistidas
-
----
-
-# 🧪 **Testes de SQL Automaticamente Gerados**
-
-Exemplos de perguntas suportadas:
-
-* *"Quais zonas têm maior área acumulada?"*
-* *"Liste as subzonas e ordene por perímetro."*
-* *"Quais zonas possuem letra_subz igual a 'A'?"*
-
-O LLM sempre gera SQL válidos como:
-
-```sql
-SELECT zonas, area_km2
-FROM "1201_ce_zeec_zoneamento_p_litora_2021_pol"
-ORDER BY area_km2 DESC
-LIMIT 10;
-```
+Isso garante:
+- Segurança
+- Reprodutibilidade
+- Explicabilidade
 
 ---
 
-# 🖥 **Roadmap**
+## 📊 Auditoria
 
-| Fase | Funcionalidade                          |
-| ---- | --------------------------------------- |
-| MVP  | Perguntas tabulares (SELECTs)           |
-| 1.1  | RAG usando ChromaDB                     |
-| 1.2  | Suporte a todas as tabelas da PEDEA     |
-
-Perfeito — vou adicionar ao **README.md** uma seção profissional explicando:
-
-* Trunk Based Development (TBD)
-* Padrão de commits semânticos (conventional commits)
-* Como usar as tags (`feat`, `fix`, `chore`, `refactor`, `docs`, etc.)
-* Como isso se encaixa no fluxo do projeto Iracema
-
-Vou inserir no final do README, logo antes da seção **Contribuição**.
+Toda execução gera:
+- Conversa
+- Mensagens
+- SQL Log (tempo, rows, status, modelo, motivo)
 
 ---
 
-# 🪵 **Trunk Based Development (TBD)**
+## 🗂️ RAG (ChromaDB)
 
-O projeto **Iracema** adota o modelo **Trunk Based Development**, que é hoje o padrão para equipes de alta performance, CI/CD rápido e entregas contínuas.
-
-### ✔ Princípios aplicados no Iracema
-
-1. **A branch principal é sempre deployável**
-   Toda mudança integrada no `main` deve estar estável.
-
-2. **Commits pequenos, frequentes e integrados rapidamente**
-   Branches curtas, típicas de 30 minutos a poucas horas.
-
-3. **Sem branches long-lived**
-   Nada de branches que ficam dias ou semanas desviadas da `main`.
-
-4. **Feature flags** para funcionalidades incompletas
-   Raramente usamos branches longas; usamos toggles quando necessário.
-
-5. **CI automático** executado a cada push
-   Garante que falhas sejam detectadas imediatamente.
-
-6. **Pull Requests curtos** e rápidos de revisar
-   PRs longos são evitados.
-
-### ✔ Benefícios para o projeto Iracema
-
-* Evita divergência entre camadas (Application, Data, External…).
-* Permite evoluir a arquitetura (LLM providers, Chroma, RAG) sem grandes rupturas.
-* Facilita refatorações e reorganização de pastas.
-* Garante que a API esteja sempre em um estado executável.
+Consultas bem-sucedidas são indexadas para:
+- Reuso de SQL validado
+- Redução de chamadas ao LLM
+- Aumento de precisão ao longo do tempo
 
 ---
 
-# 📝 **Commits Semânticos (Conventional Commits)**
+## 🛡️ Segurança
 
-Todos os commits devem seguir o padrão:
-
-```
-<tipo>(escopo opcional): descrição curta
-```
-
-### 🔹 Tipos aceitos no projeto
-
-| Tipo         | Quando usar                                               |
-| ------------ | --------------------------------------------------------- |
-| **feat**     | Nova funcionalidade (ex.: novo controller, novo provider) |
-| **fix**      | Correção de bug (ex.: SQL inválido, erro no provider)     |
-| **chore**    | Tarefas de manutenção (configs, scripts, renomeações)     |
-| **docs**     | Alterações no README, documentação, comentários           |
-| **refactor** | Refatoração sem mudar comportamento da API                |
-| **test**     | Inclusão ou ajuste de testes                              |
-| **perf**     | Melhorias de performance (ex.: cache, otimização SQL)     |
-| **build**    | Mudanças em Dockerfile, pipeline, dependências            |
-| **ci**       | Ajustes em CI/CD                                          |
-| **style**    | Alterações que não modificam lógica (lint, formatação)    |
-
-### ✔ Exemplos reais para o projeto Iracema
-
-#### 1. Nova feature
-
-```
-feat(api): adicionar endpoint /ask para consultas naturais
-```
-
-#### 2. Correção de bug
-
-```
-fix(sql): corrigir validação de SELECT no gerador de SQL
-```
-
-#### 3. Alteração estrutural
-
-```
-refactor(architecture): mover camada Entities para Models
-```
-
-#### 4. Documentação
-
-```
-docs: adicionar seção de trunk based development ao README
-```
-
-#### 5. Ajuste do Ollama Provider
-
-```
-feat(external): implementar Phi3LocalLLMProvider baseado em Ollama
-```
-
-#### 6. Configuração
-
-```
-chore(settings): adicionar configs de LLM no appsettings.dev.json
-```
+- Apenas SELECT
+- Sem DDL/DML
+- Whitelist de colunas
+- Geometrias bloqueadas
+- LIMIT sempre aplicado
 
 ---
 
-# 🧭 **Como fica o fluxo de desenvolvimento**
+## 🧭 Roadmap
 
-### 1️⃣ Criar uma branch curta a partir da main:
-
-```
-git checkout -b feat/ask-service
-```
-
-### 2️⃣ Fazer commits semânticos:
-
-```
-git commit -m "feat(ask): implementar serviço principal de orquestração"
-```
-
-### 3️⃣ Push rápido e PR curto:
-
-```
-git push -u origin feat/ask-service
-```
-
-### 4️⃣ Revisão e merge imediato na main
-
-(sem long-lived branches)
-
-### 5️⃣ Deploy automatizado ou manual
-
----
-
-# 🏷 **Tags de versão (opcional)**
-
-Usamos semver:
-
-```
-v1.0.0
-v1.1.0
-v1.1.1
-```
-
-Tags são criadas apenas em commits estáveis da `main`.
-
----
-
-# 🧩 Integração com o Pipeline de LLM
-
-O padrão de commits e TBD é extremamente útil no Iracema porque:
-
-* Nova camada External não quebra Application
-* Mudança no provider não afeta controllers
-* Novos prompts podem ser adicionados sem refatorações gigantes
-* RAG pode ser plugado e desplugado dinamicamente
+- [x] FastAPI + Lifespan
+- [x] Function Calling determinístico
+- [x] Auditoria completa
+- [x] RAG
+- [ ] JOINs controlados
+- [ ] Explain em JSON
+- [ ] Métrica de confiança
