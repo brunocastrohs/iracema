@@ -2,19 +2,19 @@
 # -*- coding: utf-8 -*-
 
 """
-step3_local — Popular datasources.colunas_tabela e prompts iniciais
-com base nas tabelas já existentes no schema zcm.
+datasource_step3.py
 
-- NÃO chama GeoServer
-- NÃO cria tabelas zcm.*
-- Apenas lê o schema local e atualiza:
-  - public.datasources.colunas_tabela (jsonb)
-  - public.datasources.prompt_inicial (text)        -> SQLCoder style (gera SQL)
-  - public.datasources.prompt_inicial_fc (text)     -> Function Calling style (gera JSON args)
+step3_local — Popular:
+- public.datasources.colunas_tabela (jsonb)
+- public.datasources.prompt_inicial (text)        -> SQLCoder style (gera SQL)
+- public.datasources.prompt_inicial_fc (text)     -> Function Calling style (gera JSON args)
+
+com base nas tabelas já existentes no schema TARGET_SCHEMA (ex.: zcm).
 
 Regras:
+- NÃO chama GeoServer
+- NÃO cria tabelas zcm.*
 - identificador_tabela no BD é lower case
-- TABLE_NAME apontará para zcm."<identificador>"
 - prompt inclui instrução de NÃO usar geom
 """
 
@@ -23,19 +23,6 @@ import sys
 from typing import Any, Dict, List, Optional
 
 import psycopg2
-
-TOP_K = 1000
-
-DB = {
-    "host": "localhost",
-    "port": 5435,
-    "dbname": "iracema",
-    "user": "postgres",
-    "password": "002100",
-}
-
-TARGET_SCHEMA = "zcm"
-SRID_DEFAULT = 4674  # se geometry_columns não retornar SRID, usa esse
 
 
 # -----------------------------------------------------------------------------
@@ -84,7 +71,7 @@ def table_exists(conn, schema: str, table: str) -> bool:
         return bool(cur.fetchone()[0])
 
 
-def get_geometry_info(conn, schema: str, table: str) -> Dict[str, Dict[str, Any]]:
+def get_geometry_info(conn, schema: str, table: str, default_srid: int) -> Dict[str, Dict[str, Any]]:
     """
     Retorna dict: { geom_column_name: {geom_type, srid} }
     Usa public.geometry_columns (PostGIS).
@@ -101,21 +88,21 @@ def get_geometry_info(conn, schema: str, table: str) -> Dict[str, Dict[str, Any]
     for col, gtype, srid in rows:
         out[col] = {
             "geom_type": gtype,
-            "srid": srid if srid is not None else SRID_DEFAULT,
+            "srid": srid if srid is not None else default_srid,
         }
     return out
 
 
-def get_table_columns(conn, schema: str, table: str) -> List[Dict[str, Any]]:
+def get_table_columns(conn, schema: str, table: str, default_srid: int) -> List[Dict[str, Any]]:
     """
     Lista colunas via information_schema, e enriquece com info de geometria quando existir.
 
     Observação:
-    - Mantive a regra original do seu script: AND column_name not ilike 'geom'
-      (ou seja, não traz a coluna geom literal). Se você quiser incluir colunas
-      geom com outros nomes, o detector ainda funciona.
+    - Mantém a regra: AND column_name not ilike 'geom' (não traz "geom" literal).
+      Se você quiser excluir qualquer coluna geometry (mesmo com outro nome),
+      dá pra ajustar depois.
     """
-    geom_info = get_geometry_info(conn, schema, table)
+    geom_info = get_geometry_info(conn, schema, table, default_srid)
 
     with conn.cursor() as cur:
         cur.execute("""
@@ -139,21 +126,18 @@ def get_table_columns(conn, schema: str, table: str) -> List[Dict[str, Any]]:
 
         # geometria: normalmente data_type == "USER-DEFINED" e udt_name == "geometry"
         if name in geom_info or (data_type == "USER-DEFINED" and udt_name == "geometry"):
-            gi = geom_info.get(name, {"geom_type": "Geometry", "srid": SRID_DEFAULT})
-            geom_type = gi["geom_type"]
-            srid = gi["srid"]
+            gi = geom_info.get(name, {"geom_type": "Geometry", "srid": default_srid})
             cols.append({
                 "name": name,
-                "type": f"geometry({geom_type},{srid})",
+                "type": f'geometry({gi["geom_type"]},{gi["srid"]})',
                 "is_geometry": True,
                 "nullable": nullable,
                 "description": None,
             })
         else:
-            # padroniza tipos para algo “legível” no prompt
             pg_type = data_type
             if data_type == "USER-DEFINED":
-                pg_type = udt_name  # ex.: "numeric", "uuid", etc.
+                pg_type = udt_name  # ex.: "uuid", "numeric", etc.
 
             cols.append({
                 "name": name,
@@ -176,20 +160,13 @@ def build_prompt_inicial(
     question_placeholder: str = "{PERGUNTA_DO_USUARIO}",
 ) -> str:
     """
-    Gera o prompt inicial no template do SQLCoder (PT-BR),
-    preenchendo dinamicamente a seção ### Esquema com um CREATE TABLE.
-
-    - Termina com "### SQL"
-    - A pergunta entra em {PERGUNTA_DO_USUARIO}
+    Template SQLCoder (PT-BR). Termina com "### SQL".
     """
-    def norm_bool(v: Any) -> bool:
-        return bool(v) if v is not None else False
-
     col_defs: List[str] = []
     for c in cols or []:
         col_name = str(c.get("name", "")).strip()
         col_type = str(c.get("type", "TEXT")).strip() or "TEXT"
-        nullable = norm_bool(c.get("nullable", True))
+        nullable = bool(c.get("nullable", True))
 
         if not col_name:
             continue
@@ -236,8 +213,9 @@ def build_prompt_inicial_fc(
     non_geom_str = ", ".join(non_geom_cols) if non_geom_cols else "(nenhuma detectada)"
     geom_str = ", ".join(geom_cols) if geom_cols else "(nenhuma)"
 
-    numeric_cols = []
-    text_cols = []
+    numeric_cols: List[str] = []
+    text_cols: List[str] = []
+
     for c in cols or []:
         name = str(c.get("name") or "").strip()
         ctype = str(c.get("type") or "").lower()
@@ -306,7 +284,6 @@ Campos esperados: intent, select_columns, target_column, value_column, group_by,
 """
 
 
-
 # -----------------------------------------------------------------------------
 # Update datasource
 # -----------------------------------------------------------------------------
@@ -331,11 +308,19 @@ def update_datasource(
 
 
 # -----------------------------------------------------------------------------
-# Main
+# Public step entrypoint
 # -----------------------------------------------------------------------------
 
-def main() -> int:
-    conn = psycopg2.connect(**DB)
+def run_step3(config: Dict[str, Any]) -> int:
+    """
+    Executa o step3 usando config injetado pelo pipeline.
+    """
+    db = config["db"]
+    schema_cfg = config.get("schemas") or {}
+    target_schema = schema_cfg.get("target_schema", "zcm")
+    default_srid = int(schema_cfg.get("default_srid", 4674))
+
+    conn = psycopg2.connect(**db)
     try:
         conn.autocommit = False
 
@@ -343,24 +328,22 @@ def main() -> int:
         conn.commit()
 
         ids = fetch_datasource_identifiers(conn)
-        print(f"[step3_local] Datasources no BD: {len(ids)}")
+        print(f"[Step3] Datasources no BD: {len(ids)}")
 
         updated = 0
         missing_tables = 0
 
         for ident in ids:
+            ident = (ident or "").strip().lower()
             if not ident:
                 continue
 
-            ident = ident.strip().lower()
-
-            if not table_exists(conn, TARGET_SCHEMA, ident):
+            if not table_exists(conn, target_schema, ident):
                 missing_tables += 1
                 continue
 
-            cols = get_table_columns(conn, TARGET_SCHEMA, ident)
-
-            table_name = f'{TARGET_SCHEMA}."{ident}"'
+            cols = get_table_columns(conn, target_schema, ident, default_srid)
+            table_name = f'{target_schema}."{ident}"'
 
             prompt_inicial = build_prompt_inicial(table_name, cols)
             prompt_inicial_fc = build_prompt_inicial_fc(table_name, cols)
@@ -369,18 +352,14 @@ def main() -> int:
             conn.commit()
             updated += 1
 
-        print(f"[step3_local] Atualizados (colunas_tabela + prompt_inicial + prompt_inicial_fc): {updated}")
-        print(f"[step3_local] Tabelas ausentes em {TARGET_SCHEMA}: {missing_tables}")
+        print(f"[Step3] Atualizados (colunas_tabela + prompt_inicial + prompt_inicial_fc): {updated}")
+        print(f"[Step3] Tabelas ausentes em {target_schema}: {missing_tables}")
 
         return 0
 
     except Exception as e:
         conn.rollback()
-        print(f"[step3_local] ERRO: {e}", file=sys.stderr)
+        print(f"[Step3] ERRO: {e}", file=sys.stderr)
         return 1
     finally:
         conn.close()
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

@@ -21,6 +21,7 @@ class _Settings(BaseModel):
     API_PORT: int = Field(default=9090)
     API_PREFIX: str = Field(default="/iracema-api/v1")
     API_RELOAD_ON_DEV: bool = Field(default=True)
+    HTTP_TIMEOUT_SECS:int = Field(default=120)
 
     # CORS
     CORS_ALLOW_ORIGINS: List[str] = Field(default_factory=lambda: ["*"])
@@ -44,7 +45,7 @@ class _Settings(BaseModel):
     
     VECTORSTORE_DIR: str = Field(default="/var/lib/iracema/chroma")
 
-    TOP_K: int = Field(default=10)
+    TOP_K: int = Field(default=1000)
 
 
 def _load_json(path: Path) -> dict:
@@ -80,7 +81,7 @@ settings = _Settings(
     DB_USER=_get("Database.User"),
     DB_PASSWORD=_get("Database.Password"),
     DB_NAME=_get("Database.Name"),
-    
+    HTTP_TIMEOUT_SECS=_get("HTTP_TIMEOUT_SECS"),
     TOP_K=_get("TOP_K"),
 
     # API

@@ -2,58 +2,43 @@
 # -*- coding: utf-8 -*-
 
 """
+datasource_step2.py
+
 Etapa 2 — Atualizar public.datasources a partir de metadados TXT do PEDEA
 
 Fluxo de busca (fallback):
-1) Tenta endpoint gestorapi:
-   https://pedea.sema.ce.gov.br/gestorapi/v1/arquivotxt/<identificador_com_replace__ce__por__CE_>_metadados.txt
-
-2) Se falhar (404/5xx/timeout/etc), tenta endpoint portal:
-   https://pedea.sema.ce.gov.br/portal/metadata/<identificador_sem__ce__com_uppercase>_metadados.txt
-
-3) Se ambos falharem, registra falha e segue para o próximo identificador (NUNCA aborta por falha remota).
+1) gestorapi:
+   {txt_gestorapi}{identificador_com_replace__ce__por__CE_}_metadados.txt
+2) portal:
+   {txt_portal}{identificador_lowercase}_metadados.txt   (conteúdo Latin-1)
 
 Extrai campos do TXT:
-- 02.Resumo + 03.Palavras-chave -> descricao_tabela
+- 02.Resumo           -> descricao_tabela
+- 03.Palavras-chave   -> palavras_chave
 - 04.Data de elaboração -> ano_elaboracao (ano)
-- 06.Fonte dos Dados -> fonte_dados
+- 06.Fonte dos Dados  -> fonte_dados
 
-Regra de consistência:
-- identificador_tabela no BD é sempre lower case (step1 garante).
+Regras:
+- identificador_tabela no BD é sempre lower case (step1 garante)
+- NUNCA aborta por falha remota (segue para o próximo)
+- Atualiza updated_at = NOW()
 """
 
 import re
 import sys
-from typing import Optional, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-import requests
 import psycopg2
+import requests
 
 
-DB = {
-    "host": "localhost",
-    "port": 5435,
-    "dbname": "iracema",
-    "user": "postgres",
-    "password": "002100",
-}
+# -------------------- Regex / parsing helpers --------------------
 
-# Endpoint 1 (gestorapi)
-ENDPOINT_TXT_BASE = "https://pedea.sema.ce.gov.br/gestorapi/v1/arquivotxt/"
-
-# Endpoint 2 (portal)
-ENDPOINT_PORTAL_METADATA_BASE = "https://pedea.sema.ce.gov.br/portal/metadata/"
-
-TIMEOUT_SECS = 1
-FILE_SUFFIX = "_metadados.txt"
-
-FIELD_RE = re.compile(r"^\s*(\d{2})\s*\.\s*([^:]+)\s*:\s*(.*)\s*$")
 YEAR_RE = re.compile(r"(\d{4})")
 
 CODE_LINE_RE = re.compile(r"^\s*(\d{2})\s*\.\s*$")                 # "02."
 INLINE_RE = re.compile(r"^\s*(\d{2})\s*\.\s*[^:]+:\s*(.*)\s*$")    # "02.Resumo: valor"
-LABEL_RE = re.compile(r"^\s*([^:]{2,80})\s*:\s*(.*)\s*$")          # "Resumo: valor" ou "Fonte dos Dados: ..."
-
+LABEL_RE = re.compile(r"^\s*([^:]{2,80})\s*:\s*(.*)\s*$")          # "Resumo: valor"
 
 
 def latin1_to_utf8_clean(text: str) -> str:
@@ -64,17 +49,9 @@ def latin1_to_utf8_clean(text: str) -> str:
         return ""
 
     replacements = {
-        "": '"',
-        "": '"',
-        "“": '"',
-        "”": '"',
-        "": "-",
-        "–": "-",
-        "": "-",
-        "—": "-",
-        "": "'",
-        "‘": "'",
-        "’": "'",
+        "": '"', "": '"', "“": '"', "”": '"',
+        "": "-", "–": "-", "": "-", "—": "-",
+        "": "'", "‘": "'", "’": "'",
         "\u00a0": " ",  # NBSP
     }
     for bad, good in replacements.items():
@@ -84,7 +61,6 @@ def latin1_to_utf8_clean(text: str) -> str:
     try:
         repaired = text.encode("latin-1", errors="ignore").decode("utf-8", errors="ignore")
         if repaired and (repaired.count("�") <= text.count("�")):
-            # só substitui se parecer melhor/igual
             text = repaired
     except Exception:
         pass
@@ -96,7 +72,6 @@ def latin1_to_utf8_clean(text: str) -> str:
 def parse_year(text: Optional[str]) -> Optional[int]:
     if not text:
         return None
-    text = (text)
     m = YEAR_RE.search(text)
     if not m:
         return None
@@ -122,7 +97,7 @@ def parse_metadata(content: str) -> Dict[str, str]:
     current_code: Optional[str] = None
     collecting = False
     buffer: List[str] = []
-    label_seen_for_code = False  # indica que já vimos a linha "Resumo:" / "Palavras-chave:" etc.
+    label_seen_for_code = False  # já vimos "Resumo:" / "Fonte dos Dados:" etc.
 
     def flush():
         nonlocal buffer, current_code, collecting, label_seen_for_code
@@ -134,63 +109,55 @@ def parse_metadata(content: str) -> Dict[str, str]:
         collecting = False
         label_seen_for_code = False
 
-    lines = content.splitlines()
-
-    for raw in lines:
+    for raw in content.splitlines():
         line = raw.strip()
 
-        # ignora linhas vazias, mas se estiver coletando, preserva como quebra lógica
         if not line:
             if collecting:
-                buffer.append("")  # mantém parágrafo
+                buffer.append("")  # preserva quebra lógica
             continue
 
-        # Caso 1: linha inline "02.Resumo: valor"
+        # Caso 1: "02.Resumo: valor"
         m_inline = INLINE_RE.match(line)
         if m_inline:
-            # antes de sobrescrever, flush do anterior
             flush()
             code = m_inline.group(1)
-            value = m_inline.group(2).strip()
+            value = (m_inline.group(2) or "").strip()
             if value:
                 data[code] = value
             current_code = None
             continue
 
-        # Caso 2: só o código "02."
+        # Caso 2: "02."
         m_code = CODE_LINE_RE.match(line)
         if m_code:
-            # começa novo campo -> flush do anterior
             flush()
             current_code = m_code.group(1)
             collecting = True
             continue
 
-        # Se estamos em um código do tipo "02." e ainda não vimos "Resumo:"
-        # aceita "Resumo:" / "Palavras-chave:" / etc.
+        # Caso 3: após "02." capturar "Resumo:" e múltiplas linhas
         if collecting and current_code:
             m_label = LABEL_RE.match(line)
             if m_label and not label_seen_for_code:
                 label_seen_for_code = True
-                # se já tiver valor na mesma linha após ':', entra no buffer
                 after = (m_label.group(2) or "").strip()
                 if after:
                     buffer.append(after)
                 continue
 
-            # Caso 3: conteúdo em múltiplas linhas (após o label)
             if label_seen_for_code:
                 buffer.append(raw.strip())
                 continue
 
-        # Se chegou aqui, é uma linha que não conseguimos associar.
-        # (ignore silenciosamente para não quebrar o parsing)
+        # ignore silenciosamente
         continue
 
-    # flush final
     flush()
-
     return data
+
+
+# -------------------- DB helpers --------------------
 
 def fetch_all_identificadores(conn) -> List[str]:
     sql = """
@@ -202,102 +169,6 @@ def fetch_all_identificadores(conn) -> List[str]:
     with conn.cursor() as cur:
         cur.execute(sql)
         return [r[0] for r in cur.fetchall()]
-
-
-def _http_get_text(url: str) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Retorna (text, err). Nunca levanta exceção para falhas HTTP.
-    """
-    try:
-        r = requests.get(url, timeout=TIMEOUT_SECS)
-    except requests.exceptions.Timeout:
-        return None, f"timeout: {url}"
-    except requests.exceptions.RequestException as e:
-        return None, f"request_exception: {url} | {e}"
-
-    if r.status_code == 200:
-        return r.text, None
-
-    if r.status_code == 404:
-        return None, f"not_found_404: {url}"
-
-    if 500 <= r.status_code <= 599:
-        return None, f"server_error_{r.status_code}: {url}"
-
-    return None, f"http_{r.status_code}: {url}"
-
-
-def fetch_metadata_txt_portal(identificador_local: str) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Endpoint gestorapi (primeira tentativa):
-    https://pedea.sema.ce.gov.br/gestorapi/v1/arquivotxt/<identificador_com__ce__por__CE_>_metadados.txt
-
-    Regra pedida originalmente:
-    antes de chamar, aplicar replace("_ce_", "_CE_").
-    """
-    remote_id = identificador_local.replace("_ce_", "_CE_")
-    url = f"{ENDPOINT_TXT_BASE}{remote_id}{FILE_SUFFIX}"
-    return _http_get_text(url)
-
-
-def fetch_metadata_txt_portal_pedea(identificador_local: str) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Endpoint portal (fallback):
-    https://pedea.sema.ce.gov.br/portal/metadata/<identificador_lowercase>_metadados.txt
-
-    IMPORTANTE:
-    - resposta vem em Latin-1
-    - decodificar manualmente para UTF-8
-    """
-    url = f"{ENDPOINT_PORTAL_METADATA_BASE}{identificador_local}{FILE_SUFFIX}"
-
-    try:
-        r = requests.get(url, timeout=TIMEOUT_SECS)
-    except requests.exceptions.Timeout:
-        return None, f"timeout: {url}"
-    except requests.exceptions.RequestException as e:
-        return None, f"request_exception: {url} | {e}"
-
-    if r.status_code == 200:
-        try:
-            # 🔑 conversão explícita Latin-1 → Unicode (UTF-8 interno do Python)
-            text = r.content.decode("latin-1")
-            return text, None
-        except Exception as e:
-            return None, f"decode_latin1_error: {url} | {e}"
-
-    if r.status_code == 404:
-        return None, f"not_found_404: {url}"
-
-    if 500 <= r.status_code <= 599:
-        return None, f"server_error_{r.status_code}: {url}"
-
-    return None, f"http_{r.status_code}: {url}"
-
-
-
-def fetch_metadata_with_fallback(identificador_local: str) -> Tuple[Optional[str], Optional[str], str]:
-    """
-    Tenta primeiro gestorapi, depois portal. Retorna (txt, err, source).
-    source ∈ {"gestorapi", "portal", "none"}
-    """
-    #print(identificador_local)
-    #print("Tentando fetch 1")
-    txt, err = fetch_metadata_txt_portal(identificador_local)
-    if txt is not None:
-        #print("fetch 1 ok!")
-        return txt, None, "gestorapi"
-
-    #print("Tentando fetch 2")
-    txt2, err2 = fetch_metadata_txt_portal_pedea(identificador_local)
-    if txt2 is not None:
-        #print("fetch 2 ok!")
-        return txt2, None, "portal"
-    
-    #print("fetch nao ok!")
-    # falhou em ambos
-    combined_err = f"gestorapi_fail=({err}); portal_fail=({err2})"
-    return None, combined_err, "none"
 
 
 def update_datasource(
@@ -318,7 +189,6 @@ def update_datasource(
         updated_at = NOW()
       WHERE identificador_tabela = %s;
     """
-
     fonte_norm = fonte or "" if fonte else None
 
     with conn.cursor() as cur:
@@ -326,8 +196,107 @@ def update_datasource(
         return cur.rowcount > 0
 
 
-def main() -> int:
-    conn = psycopg2.connect(**DB)
+# -------------------- HTTP helpers --------------------
+
+def _http_get_text(url: str, timeout_secs: int) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Retorna (text, err). Nunca levanta exceção para falhas HTTP.
+    """
+    try:
+        r = requests.get(url, timeout=timeout_secs)
+    except requests.exceptions.Timeout:
+        return None, f"timeout: {url}"
+    except requests.exceptions.RequestException as e:
+        return None, f"request_exception: {url} | {e}"
+
+    if r.status_code == 200:
+        return r.text, None
+    if r.status_code == 404:
+        return None, f"not_found_404: {url}"
+    if 500 <= r.status_code <= 599:
+        return None, f"server_error_{r.status_code}: {url}"
+    return None, f"http_{r.status_code}: {url}"
+
+
+def fetch_metadata_txt_gestorapi(
+    identificador_local: str,
+    endpoints: Dict[str, Any],
+    timeout_secs: int,
+) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Endpoint gestorapi:
+    {txt_gestorapi}{identificador_com__ce__por__CE_}{txt_suffix}
+    """
+    remote_id = identificador_local.replace("_ce_", "_CE_")
+    url = f'{endpoints["txt_gestorapi"]}{remote_id}{endpoints["txt_suffix"]}'
+    return _http_get_text(url, timeout_secs)
+
+
+def fetch_metadata_txt_portal(
+    identificador_local: str,
+    endpoints: Dict[str, Any],
+    timeout_secs: int,
+) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Endpoint portal:
+    {txt_portal}{identificador_lowercase}{txt_suffix}
+
+    Resposta vem como Latin-1 => decodifica manualmente.
+    """
+    url = f'{endpoints["txt_portal"]}{identificador_local}{endpoints["txt_suffix"]}'
+    try:
+        r = requests.get(url, timeout=timeout_secs)
+    except requests.exceptions.Timeout:
+        return None, f"timeout: {url}"
+    except requests.exceptions.RequestException as e:
+        return None, f"request_exception: {url} | {e}"
+
+    if r.status_code == 200:
+        try:
+            text = r.content.decode("latin-1")
+            return text, None
+        except Exception as e:
+            return None, f"decode_latin1_error: {url} | {e}"
+
+    if r.status_code == 404:
+        return None, f"not_found_404: {url}"
+    if 500 <= r.status_code <= 599:
+        return None, f"server_error_{r.status_code}: {url}"
+    return None, f"http_{r.status_code}: {url}"
+
+
+def fetch_metadata_with_fallback(
+    identificador_local: str,
+    endpoints: Dict[str, Any],
+    timeout_secs: int,
+) -> Tuple[Optional[str], Optional[str], str]:
+    """
+    Tenta primeiro gestorapi, depois portal. Retorna (txt, err, source).
+    source ∈ {"gestorapi", "portal", "none"}
+    """
+    txt, err = fetch_metadata_txt_gestorapi(identificador_local, endpoints, timeout_secs)
+    if txt is not None:
+        return txt, None, "gestorapi"
+
+    txt2, err2 = fetch_metadata_txt_portal(identificador_local, endpoints, timeout_secs)
+    if txt2 is not None:
+        return txt2, None, "portal"
+
+    combined_err = f"gestorapi_fail=({err}); portal_fail=({err2})"
+    return None, combined_err, "none"
+
+
+# -------------------- Public step entrypoint --------------------
+
+def run_step2(config: Dict[str, Any]) -> int:
+    """
+    Executa o step2 usando config injetado pelo pipeline.
+    """
+    db = config["db"]
+    timeout_secs = int(config["http"]["timeout_secs"])
+    endpoints = config["endpoints"]
+
+    conn = psycopg2.connect(**db)
     try:
         conn.autocommit = False
 
@@ -343,8 +312,11 @@ def main() -> int:
         errors: List[str] = []
 
         for ident in ids:
-            # ident já está em lower case (padrão do step1)
-            txt, err, source = fetch_metadata_with_fallback(ident)
+            ident = (ident or "").strip().lower()
+            if not ident:
+                continue
+
+            txt, err, source = fetch_metadata_with_fallback(ident, endpoints, timeout_secs)
 
             if txt is None:
                 remote_fail += 1
@@ -356,12 +328,15 @@ def main() -> int:
             elif source == "portal":
                 used_portal += 1
 
-            meta = parse_metadata(txt)
+            # normalizações adicionais
+            txt_clean = latin1_to_utf8_clean(txt)
 
-            resumo = (meta.get("02") or "") 
-            palavras = (meta.get("03") or "") 
+            meta = parse_metadata(txt_clean)
+
+            resumo = (meta.get("02") or "").strip() or None
+            palavras = (meta.get("03") or "").strip() or None
             ano = parse_year(meta.get("04"))
-            fonte = (meta.get("06") or "")
+            fonte = (meta.get("06") or "").strip() or None
 
             ok = update_datasource(conn, ident, resumo, palavras, ano, fonte)
             if ok:
@@ -392,7 +367,3 @@ def main() -> int:
         return 1
     finally:
         conn.close()
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
