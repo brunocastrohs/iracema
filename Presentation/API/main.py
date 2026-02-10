@@ -1,5 +1,26 @@
 # Presentation/API/main.py
 
+#Buildar
+#python3 -m venv .venv && source .venv/bin/activate
+#pip install -r Presentation/API/requirements.txt
+#export ENVIRONMENT=dev PYTHONPATH=$PWD
+#sudo mkdir -p /var/lib/iracema/chroma && sudo chown -R $USER:$USER /var/lib/iracema && sudo chmod -R 755 /var/lib/iracema
+#uvicorn Presentation.API.main:app --host 0.0.0.0 --port 9090 --reload
+
+
+#UNINSTALL
+#pip uninstall -y langchain langchain-core langchain-community langchain-openai openai
+#pip cache purge
+
+#AUX
+#nvidia-smi
+#htop
+#curl -fsSL https://ollama.com/install.sh | sh
+#ollama pull phi3:mini && ollama pull sqlcoder:7b && ollama pull qwen2.5:7b-instruct
+
+#Rodar
+#source .venv/bin/activate && uvicorn Presentation.API.main:app --host 0.0.0.0 --port 9090 --reload
+
 import os
 import uvicorn
 from contextlib import asynccontextmanager

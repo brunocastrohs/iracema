@@ -29,7 +29,7 @@ FROM nginx:alpine AS runner
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copia o build
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/dist /usr/share/nginx/html/iracema
 
 # (opcional) healthcheck simples
 HEALTHCHECK --interval=30s --timeout=3s \
