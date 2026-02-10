@@ -19,6 +19,7 @@ __pycache__/
 *.egg-info/
 .eggs/
 *.log
+*.zip
 
 # --- Configurações locais ---
 *.env
