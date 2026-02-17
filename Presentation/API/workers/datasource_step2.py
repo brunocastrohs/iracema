@@ -36,10 +36,101 @@ import requests
 
 YEAR_RE = re.compile(r"(\d{4})")
 
-CODE_LINE_RE = re.compile(r"^\s*(\d{2})\s*\.\s*$")                 # "02."
-INLINE_RE = re.compile(r"^\s*(\d{2})\s*\.\s*[^:]+:\s*(.*)\s*$")    # "02.Resumo: valor"
+# Agora aceita 1 ou 2 dígitos, e normaliza para "01".."99"
+CODE_LINE_RE = re.compile(r"^\s*(\d{1,2})\s*\.\s*$")  # "2." ou "02."
+# Agora aceita "2.Resumo: ..." ou "02.Resumo: ..."
+INLINE_RE = re.compile(r"^\s*(\d{1,2})\s*\.\s*[^:]+:\s*(.*)\s*$")
 LABEL_RE = re.compile(r"^\s*([^:]{2,80})\s*:\s*(.*)\s*$")          # "Resumo: valor"
 
+def _norm_code(code: str) -> str:
+    """
+    Normaliza "1" -> "01", "02" -> "02", "12" -> "12"
+    """
+    try:
+        n = int(code)
+        if 0 <= n <= 99:
+            return f"{n:02d}"
+    except Exception:
+        pass
+    return code.zfill(2)  # fallback
+
+
+def parse_metadata(content: str) -> Dict[str, str]:
+    """
+    Parser tolerante a:
+    - '2.Resumo: ...'  (inline)
+    - '02.Resumo: ...' (inline)
+    - '2.' + 'Resumo:' + multiline
+    - '02.' + 'Resumo:' + multiline
+
+    Retorna dict com chaves "02", "03", "04", "06" quando encontradas.
+    """
+    data: Dict[str, str] = {}
+
+    current_code: Optional[str] = None
+    collecting = False
+    buffer: List[str] = []
+    label_seen_for_code = False  # já vimos "Resumo:" / "Fonte dos Dados:" etc.
+
+    def flush():
+        nonlocal buffer, current_code, collecting, label_seen_for_code
+        if current_code and buffer:
+            value = "\n".join([ln.rstrip() for ln in buffer]).strip()
+            if value:
+                data[current_code] = value
+        buffer = []
+        collecting = False
+        label_seen_for_code = False
+        current_code = None
+
+    for raw in content.splitlines():
+        line = raw.strip()
+
+        if not line:
+            if collecting:
+                buffer.append("")
+            continue
+
+        # Caso 1: "2.Resumo: valor" / "02.Resumo: valor"
+        m_inline = INLINE_RE.match(line)
+        if m_inline:
+            flush()
+            code = _norm_code(m_inline.group(1))
+            value = (m_inline.group(2) or "").strip()
+            if value:
+                data[code] = value
+            continue
+
+        # Caso 2: "2." / "02."
+        m_code = CODE_LINE_RE.match(line)
+        if m_code:
+            flush()
+            current_code = _norm_code(m_code.group(1))
+            collecting = True
+            continue
+
+        # Caso 3: após "2." capturar "Resumo:" e múltiplas linhas
+        if collecting and current_code:
+            m_label = LABEL_RE.match(line)
+
+            # primeira linha label: "Resumo: ..." / "Fonte dos Dados: ..."
+            if m_label and not label_seen_for_code:
+                label_seen_for_code = True
+                after = (m_label.group(2) or "").strip()
+                if after:
+                    buffer.append(after)
+                continue
+
+            # linhas seguintes do conteúdo
+            if label_seen_for_code:
+                buffer.append(raw.strip())
+                continue
+
+        # ignore silenciosamente
+        continue
+
+    flush()
+    return data
 
 def latin1_to_utf8_clean(text: str) -> str:
     """
@@ -82,79 +173,6 @@ def parse_year(text: Optional[str]) -> Optional[int]:
         return None
     except ValueError:
         return None
-
-
-def parse_metadata(content: str) -> Dict[str, str]:
-    """
-    Parser tolerante a:
-    - '02.Resumo: ...' (inline)
-    - '02.' + 'Resumo:' + texto em várias linhas
-
-    Retorna dict com chaves "02", "03", "04", "06" quando encontradas.
-    """
-    data: Dict[str, str] = {}
-
-    current_code: Optional[str] = None
-    collecting = False
-    buffer: List[str] = []
-    label_seen_for_code = False  # já vimos "Resumo:" / "Fonte dos Dados:" etc.
-
-    def flush():
-        nonlocal buffer, current_code, collecting, label_seen_for_code
-        if current_code and buffer:
-            value = "\n".join([ln.rstrip() for ln in buffer]).strip()
-            if value:
-                data[current_code] = value
-        buffer = []
-        collecting = False
-        label_seen_for_code = False
-
-    for raw in content.splitlines():
-        line = raw.strip()
-
-        if not line:
-            if collecting:
-                buffer.append("")  # preserva quebra lógica
-            continue
-
-        # Caso 1: "02.Resumo: valor"
-        m_inline = INLINE_RE.match(line)
-        if m_inline:
-            flush()
-            code = m_inline.group(1)
-            value = (m_inline.group(2) or "").strip()
-            if value:
-                data[code] = value
-            current_code = None
-            continue
-
-        # Caso 2: "02."
-        m_code = CODE_LINE_RE.match(line)
-        if m_code:
-            flush()
-            current_code = m_code.group(1)
-            collecting = True
-            continue
-
-        # Caso 3: após "02." capturar "Resumo:" e múltiplas linhas
-        if collecting and current_code:
-            m_label = LABEL_RE.match(line)
-            if m_label and not label_seen_for_code:
-                label_seen_for_code = True
-                after = (m_label.group(2) or "").strip()
-                if after:
-                    buffer.append(after)
-                continue
-
-            if label_seen_for_code:
-                buffer.append(raw.strip())
-                continue
-
-        # ignore silenciosamente
-        continue
-
-    flush()
-    return data
 
 
 # -------------------- DB helpers --------------------

@@ -27,6 +27,10 @@ from Application.helpers.query_plan_sql_compiler_helper import compile_query_pla
 from Application.helpers.iracema_apply_topk_limit_helper import apply_topk_limit
 from Application.interfaces.i_iracema_ask_by_fc_service import IIracemaAskByFCService
 
+from Application.dto.iracema_fca_dto import FCAArgsDto
+from Application.helpers.fca_validator_helper import validate_and_normalize_fca
+from Application.helpers.fca_sql_compiler_helper import compile_fca_to_sql
+
 
 def _build_rows_summary(rows: List[Dict[str, Any]], top_k: int) -> Dict[str, Any]:
     preview = rows[: min(len(rows), top_k)]
@@ -69,6 +73,174 @@ class IracemaAskByFCService(IIracemaAskByFCService):
         self._llm_client = llm_client
         self._llm_provider = llm_provider
         self._llm_model = llm_model
+        
+    def ask_fc_with_args(self, request: IracemaAskRequestDto, fca: FCAArgsDto) -> IracemaAskResponseDto:
+        """
+        Novo modo:
+        - NÃO chama LLM
+        - NÃO faz retrieve no vector store (remove custo)
+        - valida FCA vs columns_meta
+        - compila SQL determinístico
+        - executa, loga
+        - indexa FCA no vector store (Pergunta -> FCA) para auditoria/memória
+        """
+        session = self._db_context.create_session()
+        question = request.question
+        error_message: Optional[str] = None
+
+        sql_executed = ""
+        rows: List[Dict[str, Any]] = []
+        rowcount = 0
+        answer_text = ""
+
+        conversation = None
+        user_message = None
+        assistant_message = None
+
+        try:
+            ds = self._datasource_repo.get_by_table_identifier(
+                session=session,
+                table_identifier=request.table_identifier,
+            )
+            if ds is None or not ds.is_ativo:
+                raise ValueError("table_identifier inválido ou datasource inativa. Execute /start.")
+
+            table_fqn = build_table_fqn(request.table_identifier)
+
+            # conversa
+            conversation = self._get_or_create_conversation(session, request, question)
+
+            # msg user
+            user_message = self._message_repo.add_message(
+                session=session,
+                conversation_id=conversation.id,
+                role=MessageRoleEnum.USER,
+                content=question,
+            )
+            session.flush()
+
+            # 1) valida e normaliza FCA (whitelist + defaults)
+            fca.table_fqn = table_fqn  # força a tabela do request
+            fca = validate_and_normalize_fca(fca, columns_meta=ds.colunas_tabela, top_k=request.top_k)
+
+            # 2) compila SQL determinístico
+            sql_plan = compile_fca_to_sql(fca)
+            sql_executed = sql_plan.sql
+
+            # 3) executa
+            start = time.perf_counter()
+            with self._db_context.engine.connect() as connection:
+                result = connection.execute(text(sql_executed))
+                columns = result.keys()
+                rows = [dict(zip(columns, row)) for row in result.fetchall()]
+            rowcount = len(rows)
+            duration_ms = (time.perf_counter() - start) * 1000.0
+
+            # 4) log SUCCESS
+            self._sql_log_repo.log_sql(
+                session=session,
+                conversation_id=conversation.id,
+                message_id=user_message.id,
+                provider=self._llm_provider,
+                model=self._llm_model,
+                sql_text=sql_executed,
+                rowcount=rowcount,
+                duration_ms=duration_ms,
+                status=QueryStatusEnum.SUCCESS,
+                error_message=f"planner:{sql_plan.reason}",
+            )
+
+            # 5) indexa FCA (sempre) - não precisa mais retrieve, mas mantém memória/auditoria
+            # Sugestão: criar um método novo no rag_index_service
+            # index_fca(question, fca_json, sql_executed, ...)
+            self._rag_index_service.index_success(
+                table_identifier=request.table_identifier,
+                question=question,
+                sql_executed=sql_executed,
+                rowcount=rowcount,
+                reason="fc_args",
+                duration_ms=duration_ms,
+                conversation_id=conversation.id,
+                message_id=user_message.id,
+                # opcional: incluir fca serializado se seu index aceitar metadados
+                # extra={"fca": fca.model_dump()}
+            )
+
+            # 6) explain (opcional)
+            if getattr(request, "explain", True):
+                rows_summary = _build_rows_summary(rows, request.top_k)
+                answer_text = self._llm_client.explain_result(
+                    schema_description=ds.prompt_inicial or "",
+                    question=question,
+                    sql_executed=sql_executed,
+                    rows=rows_summary["preview"],
+                    rowcount=rowcount,
+                )
+            else:
+                answer_text = ""
+
+            assistant_message = self._message_repo.add_message(
+                session=session,
+                conversation_id=conversation.id,
+                role=MessageRoleEnum.ASSISTANT,
+                content=answer_text,
+            )
+            session.flush()
+
+        except Exception as ex:
+            error_message = str(ex)
+            answer_text = "Ocorreu um erro ao processar sua pergunta. A equipe técnica será notificada."
+
+            if conversation is None:
+                conversation = self._conversation_repo.create(session, title=question[:120])
+                session.flush()
+
+            if user_message is None:
+                user_message = self._message_repo.add_message(
+                    session=session,
+                    conversation_id=conversation.id,
+                    role=MessageRoleEnum.USER,
+                    content=question,
+                )
+                session.flush()
+
+            assistant_message = self._message_repo.add_message(
+                session=session,
+                conversation_id=conversation.id,
+                role=MessageRoleEnum.ASSISTANT,
+                content=answer_text,
+            )
+            session.flush()
+
+            self._sql_log_repo.log_sql(
+                session=session,
+                conversation_id=conversation.id,
+                message_id=user_message.id,
+                provider=self._llm_provider,
+                model=self._llm_model,
+                sql_text=sql_executed or "",
+                rowcount=rowcount,
+                duration_ms=0.0,
+                status=QueryStatusEnum.ERROR,
+                error_message=error_message,
+            )
+
+        result_preview = rows[: min(len(rows), request.top_k)]
+
+        response = build_ask_response_dto(
+            conversation=conversation,
+            user_message=user_message,
+            assistant_message=assistant_message,
+            question=question,
+            answer_text=answer_text,
+            sql_executed=sql_executed,
+            rowcount=rowcount,
+            result_preview=result_preview,
+            error=error_message,
+        )
+
+        session.close()
+        return response
 
     def ask_fc(self, request: IracemaAskRequestDto) -> IracemaAskResponseDto:
         session = self._db_context.create_session()

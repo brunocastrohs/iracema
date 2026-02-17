@@ -58,6 +58,8 @@ export function buildDocs(rows) {
       const keywords = splitKeywords(r.palavras_chave);
       const columns = extractColumns(r.colunas_tabela);
 
+      console.log(r.titulo_tabela + " " + r.is_ativo)
+
       return {
         id: r.identificador_tabela,
         title: r.titulo_tabela,

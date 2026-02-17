@@ -8,7 +8,7 @@ from Application.dto.iracema_ask_dto import (
 )
 from Application.interfaces.i_iracema_ask_service import IIracemaAskService
 from Application.interfaces.i_iracema_ask_by_fc_service import IIracemaAskByFCService
-
+from Application.dto.iracema_fca_dto import FCAArgsDto
 
 from Presentation.API.helpers.iracema_dependencies_helper import (
     get_current_user,
@@ -94,3 +94,11 @@ def ask_fc(
     svc: IIracemaAskByFCService = Depends(get_iracema_ask_fc_service),
 ):
     return svc.ask_fc(request)
+
+@router.post("/ask/fc/args")
+def ask_fc_args(
+    request: IracemaAskRequestDto,
+    fca: FCAArgsDto,
+    svc: IIracemaAskByFCService = Depends(get_iracema_ask_fc_service),
+):
+    return svc.ask_fc_with_args(request, fca)
