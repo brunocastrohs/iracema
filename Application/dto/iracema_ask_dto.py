@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from Application.dto.iracema_fca_dto import FCAArgsDto
+
 
 class IracemaAskRequestDto(BaseModel):
     """
@@ -34,6 +36,8 @@ class IracemaAskRequestDto(BaseModel):
     )
     explain: bool = True
 
+class IracemaAskWithFcaRequestDto(IracemaAskRequestDto):
+    fca: FCAArgsDto
 
 class IracemaAskResponseDto(BaseModel):
     """

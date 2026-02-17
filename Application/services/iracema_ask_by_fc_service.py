@@ -11,8 +11,7 @@ from Domain.interfaces.i_iracema_datasource_repository import IIracemaDataSource
 
 from Domain.iracema_enums import MessageRoleEnum, LLMProviderEnum, LLMModelEnum, QueryStatusEnum
 
-from Application.dto.iracema_ask_dto import IracemaAskRequestDto, IracemaAskResponseDto
-from Application.interfaces.i_iracema_ask_service import IIracemaAskService
+from Application.dto.iracema_ask_dto import IracemaAskRequestDto, IracemaAskResponseDto, IracemaAskWithFcaRequestDto
 from Application.interfaces.i_iracema_llm_client import IIracemaLLMClient
 from Application.interfaces.i_iracema_rag_index_service import IIracemaRagIndexService
 from Application.interfaces.i_iracema_rag_retrieve_service import IIracemaRagRetrieveService
@@ -74,7 +73,7 @@ class IracemaAskByFCService(IIracemaAskByFCService):
         self._llm_provider = llm_provider
         self._llm_model = llm_model
         
-    def ask_fc_with_args(self, request: IracemaAskRequestDto, fca: FCAArgsDto) -> IracemaAskResponseDto:
+    def ask_fc_with_args(self, request: IracemaAskWithFcaRequestDto) -> IracemaAskResponseDto:
         """
         Novo modo:
         - NÃO chama LLM
@@ -118,13 +117,15 @@ class IracemaAskByFCService(IIracemaAskByFCService):
                 content=question,
             )
             session.flush()
+            
+            
 
             # 1) valida e normaliza FCA (whitelist + defaults)
-            fca.table_fqn = table_fqn  # força a tabela do request
-            fca = validate_and_normalize_fca(fca, columns_meta=ds.colunas_tabela, top_k=request.top_k)
+            request.fca.table_fqn = table_fqn  # força a tabela do request
+            request.fca = validate_and_normalize_fca(request.fca, columns_meta=ds.colunas_tabela, top_k=request.top_k)
 
             # 2) compila SQL determinístico
-            sql_plan = compile_fca_to_sql(fca)
+            sql_plan = compile_fca_to_sql(request.fca)
             sql_executed = sql_plan.sql
 
             # 3) executa

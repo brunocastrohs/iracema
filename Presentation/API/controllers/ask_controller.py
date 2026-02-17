@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from Application.dto.iracema_ask_dto import (
     IracemaAskRequestDto,
     IracemaAskResponseDto,
+    IracemaAskWithFcaRequestDto
 )
 from Application.interfaces.i_iracema_ask_service import IIracemaAskService
 from Application.interfaces.i_iracema_ask_by_fc_service import IIracemaAskByFCService
@@ -97,8 +98,7 @@ def ask_fc(
 
 @router.post("/ask/fc/args")
 def ask_fc_args(
-    request: IracemaAskRequestDto,
-    fca: FCAArgsDto,
+    request: IracemaAskWithFcaRequestDto,
     svc: IIracemaAskByFCService = Depends(get_iracema_ask_fc_service),
 ):
-    return svc.ask_fc_with_args(request, fca)
+    return svc.ask_fc_with_args(request)

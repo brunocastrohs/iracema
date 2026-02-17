@@ -1,8 +1,6 @@
 from abc import ABC, abstractmethod
 
-from Application.dto.iracema_ask_dto import IracemaAskRequestDto, IracemaAskResponseDto
-from Application.dto.iracema_fca_dto import FCAArgsDto
-from Application.dto.iracema_fca_dto import FCAArgsDto
+from Application.dto.iracema_ask_dto import IracemaAskRequestDto, IracemaAskResponseDto, IracemaAskWithFcaRequestDto
 
 class IIracemaAskByFCService(ABC):
     """
@@ -16,5 +14,5 @@ class IIracemaAskByFCService(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def ask_fc_with_args(self, request: IracemaAskRequestDto, fca: FCAArgsDto) -> IracemaAskResponseDto:
+    def ask_fc_with_args(self, request: IracemaAskWithFcaRequestDto) -> IracemaAskResponseDto:
         raise NotImplementedError()
