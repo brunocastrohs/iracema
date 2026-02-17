@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import "./styles.css";
 
 const STRATEGIES = [
-  { value: "ask/fc", label: "Function Calling (ask/fc)" },
+  { value: "ask/fc/args", label: "Function Calling Args(ask/fc/args)" },
+  /*{ value: "ask/fc", label: "Function Calling (ask/fc)" },
   { value: "ask/heuristic", label: "Heurística (ask/heuristic)" },
   { value: "ask/ai", label: "IA (ask/ai)" },
-  { value: "ask", label: "Heurística+IA (ask/heuristic/ai)" },
+  { value: "ask", label: "Heurística+IA (ask/heuristic/ai)" },*/
 ];
 
 function loadConfig() {
@@ -20,7 +21,7 @@ function loadConfig() {
 
 function saveConfig({ explain, strategy }) {
   localStorage.setItem("iracema_explain", String(Boolean(explain)));
-  localStorage.setItem("iracema_strategy", String(strategy || "ask/fc"));
+  localStorage.setItem("iracema_strategy", String(strategy || "ask/fc/args"));
 }
 
 function Help({ children }) {
@@ -80,10 +81,17 @@ export default function Configuration() {
           <div className="config-label">Estratégia de Resposta</div>
           <Help>
             <ul className="config-strategy-list">
+
+              <li>
+                <b>ask/fc/args</b> — Plano estruturado via geração de Function Calling Arguments ainda na etapa de interação com o chat.
+                <br />
+                <span>Mais robusto e a prova de falhas; ideal para produção sem hardware para LLM.</span>
+              </li>
+
               <li>
                 <b>ask/fc</b> — Plano estruturado via geração de Function Calling Arguments.
                 <br />
-                <span>Mais confiável e determinístico; ideal para produção.</span>
+                <span>Mais confiável e determinístico; ideal para produção se há hardware para LLM.</span>
               </li>
 
               <li>

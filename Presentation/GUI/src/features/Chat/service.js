@@ -35,10 +35,10 @@ export async function getCatalog() {
  * Payload:
  * { question, table_identifier, top_k }
  */
-export async function askChat({ question, table_identifier, explain = false, strategy = "ask/fc", top_k = 1000 }) {
+export async function askChat({ question, table_identifier, explain = false, strategy = "ask/fc/args", fca, top_k = 1000 }) {
   try {
     const endpoint = strategy;
-    const payload = { question, table_identifier, explain: Boolean(explain), top_k };
+    const payload = { question, table_identifier, explain: Boolean(explain), top_k, fca: fca };
     const { data } = await api.post(`/chat/${endpoint}`, payload);
     return { ok: true, data };
   } catch (error) {

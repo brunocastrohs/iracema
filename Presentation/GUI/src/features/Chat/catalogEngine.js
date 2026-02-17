@@ -58,8 +58,6 @@ export function buildDocs(rows) {
       const keywords = splitKeywords(r.palavras_chave);
       const columns = extractColumns(r.colunas_tabela);
 
-      console.log(r.titulo_tabela + " " + r.is_ativo)
-
       return {
         id: r.identificador_tabela,
         title: r.titulo_tabela,
@@ -166,7 +164,7 @@ export function buildReason(query, doc) {
 /**
  * Busca top N e monta sugestões.
  */
-export function searchCatalog(index, query, limit = 8) {
+export function searchCatalog(index, query, limit = 20) {
   const res = index.search(normalizeStr(query), { limit });
   return res;
 }

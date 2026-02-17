@@ -22,7 +22,7 @@ export function parseQuickCommand(raw) {
  * - se for outra => tenta ask/fc
  */
 export function computeFallbackStrategy(preferred) {
-  if (preferred === "ask/fc") return "ask";
-  if (preferred === "ask") return "ask/fc";
-  return "ask/fc";
+  if (preferred === "ask/fc/args") return "ask";
+  if (preferred === "ask") return "ask/fc/args";
+  return "ask/fc/args";
 }

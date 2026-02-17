@@ -189,3 +189,46 @@ export function resolveTableByText({ query, docs, index }) {
 
   return { doc: null, directContinue, ambiguousDocs: [] };
 }
+
+export function normalizeColumns(doc) {
+  // suporte a formatos diferentes: doc.columns pode ser array de strings
+  // ou array de objetos {name, type, is_geometry, ...}
+  const cols = Array.isArray(doc?.columns) ? doc.columns : [];
+  const names = cols
+    .map((c) => (typeof c === "string" ? c : c?.name))
+    .filter(Boolean);
+
+  const nonGeom = cols
+    .filter((c) => {
+      if (typeof c === "string") return true;
+      return !c?.is_geometry && c?.name;
+    })
+    .map((c) => (typeof c === "string" ? c : c.name))
+    .filter(Boolean);
+
+  return {
+    allNames: Array.from(new Set(names)),
+    nonGeomNames: Array.from(new Set(nonGeom)),
+  };
+}
+
+export function pickRandom(arr, n) {
+  const a = Array.isArray(arr) ? [...arr] : [];
+  if (!a.length) return [];
+  // Fisher–Yates parcial
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, Math.max(0, Math.min(n, a.length)));
+}
+
+export function formatColumnsList(cols, max = 20) {
+  const list = (cols || []).slice(0, max);
+  const rest = Math.max(0, (cols || []).length - list.length);
+  return (
+    list.map((c) => `- ${c}`).join("\n") +
+    (rest ? `\n- … (+${rest})` : "")
+  );
+}
+

@@ -4,7 +4,7 @@ import { computeFallbackStrategy } from "../domain/chatIntents";
 export function useAskFlow() {
   async function runAskWithFallback({ question, table_identifier }) {
     const explain = localStorage.getItem("iracema_explain") === "true";
-    const preferred = localStorage.getItem("iracema_strategy") || "ask/fc";
+    const preferred = localStorage.getItem("iracema_strategy") || "ask/fc/args";
     const fallback = computeFallbackStrategy(preferred);
 
     async function tryAsk(strategy) {
