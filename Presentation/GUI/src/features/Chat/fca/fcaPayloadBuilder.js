@@ -10,6 +10,7 @@ export function buildFcaPayload({
   conversation_id = null,
   draft,
 }) {
+  
   const d = draft || {};
 
   const limit = Number.isFinite(d.limit) ? d.limit : (Number.isFinite(top_k) ? top_k : DEFAULT_LIMIT);

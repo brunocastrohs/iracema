@@ -232,3 +232,99 @@ export function formatColumnsList(cols, max = 20) {
   );
 }
 
+/**
+ * Classifica por tipo SQL -> grupos: numeric, boolean, temporal, text
+ */
+export function groupColumnsByType(columns) {
+  const groups = {
+    numeric: [],
+    boolean: [],
+    temporal: [],
+    text: [],
+    other: [],
+  };
+
+  (columns || []).forEach((c) => {
+    const t = String(c?.type || "").toLowerCase();
+
+    if (isBooleanType(t)) groups.boolean.push(c);
+    else if (isTemporalType(t)) groups.temporal.push(c);
+    else if (isNumericType(t)) groups.numeric.push(c);
+    else if (isTextType(t)) groups.text.push(c);
+    else groups.other.push(c);
+  });
+
+  return groups;
+}
+
+function isNumericType(t) {
+  return [
+    "smallint",
+    "integer",
+    "int",
+    "bigint",
+    "decimal",
+    "numeric",
+    "real",
+    "double precision",
+    "float",
+    "serial",
+    "bigserial",
+  ].some((k) => t.includes(k));
+}
+
+function isBooleanType(t) {
+  return t.includes("boolean") || t === "bool";
+}
+
+function isTemporalType(t) {
+  return [
+    "date",
+    "timestamp",
+    "timestamp without time zone",
+    "timestamp with time zone",
+    "timestamptz",
+    "time",
+    "interval",
+  ].some((k) => t.includes(k));
+}
+
+function isTextType(t) {
+  return [
+    "character varying",
+    "varchar",
+    "character",
+    "char",
+    "text",
+    "uuid",
+    "json",
+    "jsonb",
+  ].some((k) => t.includes(k));
+}
+
+/**
+ * Renderiza grupos em texto “bonito” pro chat.
+ */
+export function formatColumnsGrouped(groups, { maxPerGroup = 12 } = {}) {
+  const order = [
+    ["numeric", "Numéricas"],
+    ["boolean", "Lógicas"],
+    ["temporal", "Data/Temporal"],
+    ["text", "Textuais"],
+    ["other", "Outras"],
+  ];
+
+  const lines = [];
+
+  for (const [key, label] of order) {
+    const list = groups?.[key] || [];
+    if (!list.length) continue;
+
+    const shown = list.slice(0, maxPerGroup);
+    const rest = list.length - shown.length;
+
+    lines.push(`- ${label} (${list.length}): ${shown.map((c) => c.name).join(", ")}${rest > 0 ? ` … (+${rest})` : ""}`);
+  }
+
+  return lines.join("\n");
+}

@@ -26,6 +26,7 @@ function keepValidOrderBy(list) {
 }
 
 export function applyFcaCommand(draft, cmd) {
+  
   const d = draft || makeInitialFcaDraft();
 
   if (!cmd || !cmd.kind) return d;

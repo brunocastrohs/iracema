@@ -56,7 +56,9 @@ export function buildDocs(rows) {
     .map((r) => {
       const path = buildPath(r);
       const keywords = splitKeywords(r.palavras_chave);
-      const columns = extractColumns(r.colunas_tabela);
+
+      const columnsMeta = extractColumnsMeta(r.colunas_tabela); // [{name,label,type}]
+      const columns = columnsMeta.map((c) => c.name); // ✅ volta ao formato antigo string[]
 
       return {
         id: r.identificador_tabela,
@@ -66,15 +68,21 @@ export function buildDocs(rows) {
         year: r.ano_elaboracao ?? null,
         source: r.fonte_dados ?? null,
         keywords,
-        columns,
-        // Campo indexado: inclui TUDO (titulo + desc + keywords + path + colunas + fonte + ano)
+
+        // ✅ compatível com tudo que já existe
+        columns, // string[]
+
+        // ✅ novo campo apenas para UX do wizard
+        columnsMeta, // object[]
+
         text: normalizeStr(
           [
             r.titulo_tabela,
             r.descricao_tabela || "",
             keywords.join(" "),
             path,
-            columns.join(" "),
+            columns.join(" "),          // ✅ continua indexando nomes
+            (columnsMeta || []).map(c => `${c.name} ${c.label} ${c.type}`).join(" "), // opcional: enriquece index
             r.fonte_dados || "",
             String(r.ano_elaboracao ?? ""),
             r.identificador_tabela,
@@ -83,6 +91,19 @@ export function buildDocs(rows) {
         raw: r,
       };
     });
+}
+
+// helper
+function extractColumnsMeta(colunas_tabela) {
+  const cols = Array.isArray(colunas_tabela) ? colunas_tabela : [];
+  return cols
+    .filter(Boolean)
+    .map((c) => ({
+      name: String(c?.name || "").trim(),
+      label: String(c?.label || c?.name || "").trim(),
+      type: String(c?.type || "").trim(),
+    }))
+    .filter((c) => c.name);
 }
 
 /**

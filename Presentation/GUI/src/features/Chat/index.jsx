@@ -12,6 +12,8 @@ import {
   normalizeColumns,
   pickRandom,
   formatColumnsList,
+  formatColumnsGrouped,
+  groupColumnsByType
 } from "./helpers";
 import { searchCatalog, buildReason, buildRefinementChips } from "./catalogEngine";
 
@@ -152,11 +154,11 @@ export default function Chat() {
       ...(loadingCatalog
         ? []
         : [
-            makeAssistantMessage({
-              text: `Catálogo carregado (${(docs || []).length} tabelas ativas).`,
-              suggestedPrompts: ["mineração", "buscar: uso do solo", "buscar: unidades de conservação"],
-            }),
-          ]),
+          makeAssistantMessage({
+            text: `Catálogo carregado (${(docs || []).length} tabelas ativas).`,
+            suggestedPrompts: ["mineração", "buscar: uso do solo", "buscar: unidades de conservação"],
+          }),
+        ]),
     ]);
   }
 
@@ -190,11 +192,15 @@ export default function Chat() {
     setFcaDraft(draft);
 
     // ✅ mostra colunas no início do wizard
-    const { allNames, nonGeomNames } = doc ? normalizeColumns(doc) : { allNames: [], nonGeomNames: [] };
-    const sample = pickRandom(nonGeomNames.length ? nonGeomNames : allNames, 3);
+    const allColumns = Array.isArray(doc?.columnsMeta) ? doc.columnsMeta : [];
+    const pool = allColumns.length ? allColumns : (doc?.columns || []).map((n) => ({ name: n, label: n, type: "" }));
 
-    const columnsText =
-      allNames.length ? `\n\nColunas (${allNames.length}):\n${formatColumnsList(allNames, 20)}` : "";
+    const sample = pickRandom(pool.map((c) => c.name), 3);
+
+    const groups = groupColumnsByType(pool);
+    const columnsText = pool.length
+      ? `\n\nColunas:\n${formatColumnsGrouped(groups, { maxPerGroup: 12 })}`
+      : "";
 
     pushAssistant({
       text:
@@ -205,7 +211,7 @@ export default function Chat() {
         `\n\nPasso 1/6 — Seleção de colunas:\n` +
         `Você quer consultar todas as colunas ou apenas algumas?\n` +
         `- "todas as colunas"\n` +
-        `- "colunas: a, b, c"\n` +
+        `- "colunas: ${sample}"\n` +
         `Você também pode digitar "pular" nas próximas etapas.\n`,
       suggestedPrompts: [
         "todas as colunas",
@@ -233,11 +239,15 @@ export default function Chat() {
     const draft = makeInitialFcaDraft();
     setFcaDraft(draft);
 
-    const { allNames, nonGeomNames } = doc ? normalizeColumns(doc) : { allNames: [], nonGeomNames: [] };
-    const sample = pickRandom(nonGeomNames.length ? nonGeomNames : allNames, 3);
+    const allColumns = Array.isArray(doc?.columnsMeta) ? doc.columnsMeta : [];
+    const pool = allColumns.length ? allColumns : (doc?.columns || []).map((n) => ({ name: n, label: n, type: "" }));
 
-    const columnsText =
-      allNames.length ? `\n\nColunas (${allNames.length}):\n${formatColumnsList(allNames, 20)}` : "";
+    const sample = pickRandom(pool.map((c) => c.name), 3);
+
+    const groups = groupColumnsByType(pool);
+    const columnsText = pool.length
+      ? `\n\nColunas:\n${formatColumnsGrouped(groups, { maxPerGroup: 12 })}`
+      : "";
 
     pushAssistant({
       text:
@@ -249,7 +259,7 @@ export default function Chat() {
         `\n\nPasso 1/6 — Seleção de colunas:\n` +
         `Você quer consultar todas as colunas ou apenas algumas?\n` +
         `- "todas as colunas"\n` +
-        `- "colunas: a, b, c"\n`,
+        `- "colunas: ${sample}"\n`,
       suggestedPrompts: [
         "todas as colunas",
         sample.length ? `colunas: ${sample.join(", ")}` : "colunas: processo, ano, area_ha",
@@ -329,16 +339,16 @@ export default function Chat() {
         fcaStep === FCA_STEPS.SELECT
           ? pushSuggestedPromptsForSelect()
           : fcaStep === FCA_STEPS.WHERE
-          ? pushSuggestedPromptsForWhere()
-          : fcaStep === FCA_STEPS.GROUP_BY
-          ? pushSuggestedPromptsForGroupBy()
-          : fcaStep === FCA_STEPS.AGG
-          ? pushSuggestedPromptsForAgg()
-          : fcaStep === FCA_STEPS.ORDER_BY
-          ? pushSuggestedPromptsForOrderBy()
-          : fcaStep === FCA_STEPS.LIMIT
-          ? pushSuggestedPromptsForLimit()
-          : pushSuggestedPromptsForReady(),
+            ? pushSuggestedPromptsForWhere()
+            : fcaStep === FCA_STEPS.GROUP_BY
+              ? pushSuggestedPromptsForGroupBy()
+              : fcaStep === FCA_STEPS.AGG
+                ? pushSuggestedPromptsForAgg()
+                : fcaStep === FCA_STEPS.ORDER_BY
+                  ? pushSuggestedPromptsForOrderBy()
+                  : fcaStep === FCA_STEPS.LIMIT
+                    ? pushSuggestedPromptsForLimit()
+                    : pushSuggestedPromptsForReady(),
     });
   }
 
@@ -370,7 +380,7 @@ export default function Chat() {
         top_k: draft?.limit ?? 100,
         explain,
         conversation_id: null,
-        fca: draft,
+        draft
       });
 
       const res = await askChat(payload);
@@ -379,9 +389,8 @@ export default function Chat() {
         const base = removeTrailingLoading(prev);
 
         if (!res?.ok) {
-          const errText = `Não consegui executar a consulta agora.${
-            res?.error ? ` Detalhes: ${res.error}` : ""
-          }`.trim();
+          const errText = `Não consegui executar a consulta agora.${res?.error ? ` Detalhes: ${res.error}` : ""
+            }`.trim();
 
           // reinicia o wizard depois de renderizar a msg de erro
           setTimeout(() => {
@@ -573,16 +582,16 @@ export default function Chat() {
         fcaStep === FCA_STEPS.SELECT
           ? FCA_STEPS.WHERE
           : fcaStep === FCA_STEPS.WHERE
-          ? FCA_STEPS.GROUP_BY
-          : fcaStep === FCA_STEPS.GROUP_BY
-          ? FCA_STEPS.AGG
-          : fcaStep === FCA_STEPS.AGG
-          ? FCA_STEPS.ORDER_BY
-          : fcaStep === FCA_STEPS.ORDER_BY
-          ? FCA_STEPS.LIMIT
-          : fcaStep === FCA_STEPS.LIMIT
-          ? FCA_STEPS.READY
-          : FCA_STEPS.READY;
+            ? FCA_STEPS.GROUP_BY
+            : fcaStep === FCA_STEPS.GROUP_BY
+              ? FCA_STEPS.AGG
+              : fcaStep === FCA_STEPS.AGG
+                ? FCA_STEPS.ORDER_BY
+                : fcaStep === FCA_STEPS.ORDER_BY
+                  ? FCA_STEPS.LIMIT
+                  : fcaStep === FCA_STEPS.LIMIT
+                    ? FCA_STEPS.READY
+                    : FCA_STEPS.READY;
 
       askNextWizardQuestion(next);
       return;
@@ -609,14 +618,14 @@ export default function Chat() {
           fcaStep === FCA_STEPS.SELECT
             ? pushSuggestedPromptsForSelect()
             : fcaStep === FCA_STEPS.WHERE
-            ? pushSuggestedPromptsForWhere()
-            : fcaStep === FCA_STEPS.GROUP_BY
-            ? pushSuggestedPromptsForGroupBy()
-            : fcaStep === FCA_STEPS.AGG
-            ? pushSuggestedPromptsForAgg()
-            : fcaStep === FCA_STEPS.ORDER_BY
-            ? pushSuggestedPromptsForOrderBy()
-            : pushSuggestedPromptsForLimit(),
+              ? pushSuggestedPromptsForWhere()
+              : fcaStep === FCA_STEPS.GROUP_BY
+                ? pushSuggestedPromptsForGroupBy()
+                : fcaStep === FCA_STEPS.AGG
+                  ? pushSuggestedPromptsForAgg()
+                  : fcaStep === FCA_STEPS.ORDER_BY
+                    ? pushSuggestedPromptsForOrderBy()
+                    : pushSuggestedPromptsForLimit(),
       });
       return;
     }
