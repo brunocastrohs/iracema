@@ -12,7 +12,9 @@ export default function App() {
   return (
     <BrowserRouter basename="/iracema">
       <Routes>
-        <Route path="/" element={<Auth />} />
+        {/*<Route path="/" element={<Auth />} />*/}
+
+        <Route path="/" element={<Chat />} />
 
         <Route element={<ProtectedLayout />}>
           <Route path="/chat" element={<Chat />} />

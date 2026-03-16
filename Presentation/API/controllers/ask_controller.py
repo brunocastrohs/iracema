@@ -27,7 +27,7 @@ router = APIRouter()
 )
 async def ask_iracema(
     body: IracemaAskRequestDto,
-    user: Dict[str, Any] = Depends(get_current_user),
+    #user: Dict[str, Any] = Depends(get_current_user),
     service: IIracemaAskService = Depends(get_iracema_ask_service),
 ) -> IracemaAskResponseDto:
     """
@@ -50,7 +50,7 @@ async def ask_iracema(
 )
 async def ask_iracema_heuristic(
     body: IracemaAskRequestDto,
-    user: Dict[str, Any] = Depends(get_current_user),
+    #user: Dict[str, Any] = Depends(get_current_user),
     service: IIracemaAskService = Depends(get_iracema_ask_service),
 ) -> IracemaAskResponseDto:
     """
@@ -73,7 +73,7 @@ async def ask_iracema_heuristic(
 )
 async def ask_iracema_ai(
     body: IracemaAskRequestDto,
-    user: Dict[str, Any] = Depends(get_current_user),
+    #user: Dict[str, Any] = Depends(get_current_user),
     service: IIracemaAskService = Depends(get_iracema_ask_service),
 ) -> IracemaAskResponseDto:
     """

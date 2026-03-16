@@ -2,45 +2,21 @@ import axios from "axios";
 
 const baseURL =
   import.meta.env.VITE_API_BASE_URL ||
-  'iracema-api/v1';
+  "iracema-api/v1";
 
 const api = axios.create({
   baseURL,
-  timeout: 120000, // 2 min
+  timeout: 120000,
   headers: {
     "Content-Type": "application/json",
     Accept: "application/json",
   },
 });
 
-// ================================
-// Interceptores
-// ================================
-
-// Adiciona JWT automaticamente se existir no localStorage
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("iracema_token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-// Trata respostas e erros
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response) {
-      // Caso o token tenha expirado
-      if (error.response.status === 401) {
-        console.warn("Sessão expirada. Redirecionando para login...");
-        localStorage.removeItem("iracema_token");
-      }
-
-      // Mensagens customizadas de erro
       const message =
         error.response.data?.message ||
         error.response.data?.detail ||

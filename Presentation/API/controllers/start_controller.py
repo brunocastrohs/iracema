@@ -22,7 +22,7 @@ router = APIRouter()
     tags=["Iracema"],
 )
 async def list_datasources(
-    user: Dict[str, Any] = Depends(get_current_user),
+    #user: Dict[str, Any] = Depends(get_current_user),
     service: IIracemaStartCatalogService = Depends(get_iracema_start_catalog_service),
 ) -> DataSourceCatalogResponseDto:
     """
@@ -42,7 +42,7 @@ async def list_datasources(
 )
 async def start_iracema(
     body: IracemaStartRequestDto,
-    user: Dict[str, Any] = Depends(get_current_user),
+    #user: Dict[str, Any] = Depends(get_current_user),
     service: IIracemaStartService = Depends(get_iracema_start_service),
 ) -> IracemaStartResponseDto:
     """

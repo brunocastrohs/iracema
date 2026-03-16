@@ -33,7 +33,7 @@ import { buildFcaPayload } from "./fca/fcaPayloadBuilder";
 import { makeAssistantMessage, removeTrailingLoading } from "./domain/messageFactories";
 
 const INITIAL_TEXT =
-  "Olá! Posso te ajudar a encontrar tabelas no catálogo e montar consultas.\n\n" +
+  "Olá! Sou a Iracema, assistente de consultas da PEDEA. Posso te ajudar a encontrar tabelas no catálogo e montar consultas.\n\n" +
   "Descreva o que você procura (tema, palavra-chave, ano, fonte) e eu sugiro as opções mais próximas.\n\n" +
   "Dica: você também pode digitar o título ou o identificador_tabela para selecionar direto.";
 
@@ -129,7 +129,7 @@ export default function Chat() {
   }
 
   function pushSuggestedPromptsForLimit() {
-    return ["limit: 20", "limit: 100", "pular", "preview", "executar"];
+    return ["limit: 20", "limit: 1000", "pular", "preview", "executar"];
   }
 
   function pushSuggestedPromptsForReady() {
@@ -377,7 +377,7 @@ export default function Chat() {
       const payload = buildFcaPayload({
         question: questionForLogging || "",
         table_identifier: selectedTableId,
-        top_k: draft?.limit ?? 100,
+        top_k: draft?.limit ?? 1000,
         explain,
         conversation_id: null,
         draft
@@ -429,10 +429,26 @@ export default function Chat() {
         const answerText = safeText(res?.data?.answer_text || res?.data?.answer || "") || "Ok. Consulta executada.";
         const preview = Array.isArray(res?.data?.result_preview) ? res.data.result_preview : [];
 
+        const total =
+          Number.isFinite(Number(res?.data?.total_rows)) ? Number(res.data.total_rows)
+            : Number.isFinite(Number(res?.data?.total)) ? Number(res.data.total)
+              : Number.isFinite(Number(res?.data?.count)) ? Number(res.data.count)
+                : Number.isFinite(Number(res?.data?.rows_count)) ? Number(res.data.rows_count)
+                  : null;
+
+        const nPreview = preview.length;
+
+        // mensagem de contagem (sempre informa pelo menos o que veio no preview)
+        const countLine =
+          total != null
+            ? `Registros retornados: ${total}${nPreview ? ` (prévia: ${nPreview})` : ""}`
+            : `Registros retornados: ${nPreview}${nPreview ? " (prévia)" : ""}`;
+
+
         return [
           ...base,
           makeAssistantMessage({
-            text: answerText,
+            text: `${answerText}\n\n${countLine}`,
             preview,
             suggestedPrompts: ["nova consulta", "trocar tabela", "preview"],
           }),

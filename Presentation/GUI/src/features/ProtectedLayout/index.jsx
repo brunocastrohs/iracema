@@ -13,7 +13,7 @@ function hasValidToken() {
 export default function ProtectedLayout() {
   const [navCollapsed, setNavCollapsed] = useState(false);
 
-  if (!hasValidToken()) return <Navigate to="/" replace />;
+  {/*if (!hasValidToken()) return <Navigate to="/" replace />;*/}
 
   return (
     <div className={`protected-layout ${navCollapsed ? "nav-collapsed" : ""}`}>

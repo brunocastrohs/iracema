@@ -14,7 +14,7 @@ function loadConfig() {
   const strategyRaw = localStorage.getItem("iracema_strategy");
 
   return {
-    explain: explainRaw === null ? false : explainRaw === "true",
+    explain: explainRaw === null ? false : explainRaw === "false",
     strategy: strategyRaw || "ask/fc",
   };
 }

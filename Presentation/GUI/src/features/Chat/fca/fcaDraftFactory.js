@@ -1,6 +1,6 @@
 // src/features/Chat/fca/fcaDraftFactory.js
 
-export const DEFAULT_LIMIT = 100;
+export const DEFAULT_LIMIT = 1000;
 
 export function makeInitialFcaDraft(overrides = {}) {
   return {

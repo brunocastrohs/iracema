@@ -1,16 +1,8 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import "./styles.css";
 import logo from "../../_assets/images/logo_iracema.png";
 
 export default function Navigator({ collapsed, onToggleCollapsed }) {
-  const navigate = useNavigate();
-
-  const handleLogout = () => {
-    localStorage.clear();
-    sessionStorage.clear();
-    navigate("/", { replace: true });
-  };
-
   return (
     <div className="sidebar-wrapper">
       <button
@@ -21,7 +13,6 @@ export default function Navigator({ collapsed, onToggleCollapsed }) {
         ☰
       </button>
 
-      {/* Quando colapsado, a coluna fica 0, então nem precisa renderizar animação */}
       {!collapsed && (
         <aside className="sidebar">
           <div
@@ -39,7 +30,8 @@ export default function Navigator({ collapsed, onToggleCollapsed }) {
                   <i className="pi pi-comments" /> Chat
                 </NavLink>
               </li>
-                <li>
+
+              <li>
                 <NavLink
                   to="/config"
                   className={({ isActive }) => (isActive ? "active" : "")}
@@ -49,12 +41,6 @@ export default function Navigator({ collapsed, onToggleCollapsed }) {
               </li>
             </ul>
           </nav>
-
-          <div style={{ marginTop: "auto", padding: "10px 20px" }}>
-            <button className="nav__logout" onClick={handleLogout}>
-               <i className="pi pi-sign-out" /> Sair
-            </button>
-          </div>
         </aside>
       )}
     </div>
